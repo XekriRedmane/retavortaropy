@@ -801,6 +801,12 @@ def element_for(qname: str) -> Element:
             return SncRef()
         case "sub":
             return Sub()
+        case "subart":
+            return SubArt()
+        case "subdrv":
+            return SubDrv()
+        case "subsnc":
+            return SubSnc()
         case "sup":
             return Sup()
         case "tezrad":
