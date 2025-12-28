@@ -93,9 +93,27 @@ class RevoContentHandler(ContentHandler):
             return
 
         if isinstance(parent, vortaro.HasTextInContent):
-            parent = cast(vortaro.HasTextInContent[str], parent)
-            parent.append(content)
+            parent = cast(vortaro.HasContent[vortaro.Element], parent)
+            parent.append(vortaro.TextOnlyElement(text=content))
             return
+
+def remove_trd(element: vortaro.Element) -> None:
+    """Remove trd elements."""
+
+    # Drill down into the element, and if it HasContent, then drill down
+    # to each list element. If a list element is a Trd or a TrdGrp, then
+    # remove it from the list.
+
+    if not isinstance(element, vortaro.HasContent):
+        return
+
+    element = cast(vortaro.HasContent[vortaro.Element], element)
+    content = element.content
+    for i in range(len(content) - 1, -1, -1):
+        if isinstance(content[i], (vortaro.Trd, vortaro.TrdGrp)):
+            content.pop(i)
+            continue
+        remove_trd(content[i])
 
 
 def main() -> None:
@@ -110,10 +128,12 @@ def main() -> None:
     # print(etree.tostring(root, pretty_print=True, encoding="unicode"))
 
     root = handler.root
+    # remove_trd(root)
     print(root)
-    root_dict = asdict(root)
-    root_json = json.dumps(root_dict, ensure_ascii=False, indent=2)
-    print(root_json)
+    # root_dict = asdict(root)
+    # root_dict = root.json_encode()
+    # root_json = json.dumps(root_dict, ensure_ascii=False, indent=2)
+    # print(root_json)
 
 
 

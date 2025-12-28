@@ -2,12 +2,22 @@
 
 from __future__ import annotations  # For forward references
 
+import abc
 import dataclasses
-from typing import TypeVar
+from typing import cast, override, Any, TypeVar
+
 
 @dataclasses.dataclass
-class Element:
+class Element(abc.ABC):
     """Any element."""
+
+    def json_encode(self) -> dict[str, Any]:
+        """Encodes the element as a dict for json."""
+        return {}
+
+    def json_subencode(self) -> dict[str, Any]:
+        """Encodes the element's sub-elements as a dict for json."""
+        return {}
 
 
 T = TypeVar("T", bound=Element)
@@ -18,6 +28,10 @@ class TextOnlyElement(Element):
     """An element that contains only text."""
 
     text: str = ""
+
+    @override
+    def json_encode(self) -> dict[str, Any]:
+        return {"text": self.text}
 
 
 @dataclasses.dataclass
@@ -30,14 +44,29 @@ class HasContent[T](Element):
         """Append an element to the content list."""
         self.content.append(element)
 
+    @override
+    def json_encode(self) -> dict[str, Any]:
+        # Each element in the list to construct has to be a dict.
+        content: list[dict[str, Any]] = []
+        for element in self.content:
+            e = cast(Element, element)
+            content.append(e.json_encode())
+        encoding: dict[str, Any] = {"content": content}
+        if isinstance(self, HasKap):
+            if self.kap is not None:
+                encoding["kap"] = self.kap.json_encode()
+        encoding.update(self.json_subencode())
+        qname = QNAME_BY_TYPE[type(self)]
+        return {qname: encoding}
+
 
 @dataclasses.dataclass
-class HasTextInContent[T](HasContent[str | T]):
+class HasTextInContent[T](HasContent[TextOnlyElement | T]):
     """An element that contains an ordered list of elements, interspersed with text."""
 
 
 @dataclasses.dataclass
-class HasKap(Element):
+class HasKap:
     """An element that has a kap (rootword) element."""
 
     kap: Kap | None = None
@@ -79,6 +108,10 @@ class Rad(TextOnlyElement):
 
     var: str = ""
 
+    @override
+    def json_subencode(self) -> dict[str, Any]:
+        return {"var": self.var}
+
 
 # <!-- [ofc] Oficialeco de la kapvorto/derivajho,
 #   povas esti *, 1, ..., 8 kiel en PIV -->
@@ -113,6 +146,10 @@ class Url(TextOnlyElement):
     """A URL."""
 
     ref: str = ""
+
+    @override
+    def json_subencode(self) -> dict[str, Any]:
+        return {"ref": self.ref}
 
 
 # <!-- [lok] Loko, kie troviĝas citita frazo aŭ vorto en verko -->
@@ -154,6 +191,11 @@ class Tld(Element):
     lit: str = ""
     var: str = ""
 
+    @override
+    def json_encode(self) -> dict[str, Any]:
+        return {"tld": {"lit": self.lit, "var": self.var}}
+
+
 
 # <!-- [tezrad] Tezaŭraradiko. La kapvorto aperas en la enir-listo
 # de la tezaŭro. Se vi uzas la atributon fak, ĝi aperas en la
@@ -167,6 +209,10 @@ class TezRad(Element):
     """A thesaurus root."""
 
     fak: str = ""
+
+    @override
+    def json_encode(self) -> dict[str, Any]:
+        return {"tezrad": {"fak": self.fak}}
 
 
 # <!-- [sncref] Referenco al alia senco. Tiu elemento estas anstatauigata
@@ -183,6 +229,10 @@ class SncRef(Element):
     """Reference to another sense of a word."""
 
     ref: str = ""
+
+    @override
+    def json_encode(self) -> dict[str, Any]:
+        return {"sncref": {"ref": self.ref}}
 
 
 # <!-- [g] Grasa parto de formulo, ekz. vektoro, matrico k.s.,
@@ -211,6 +261,10 @@ class Mlg(TextOnlyElement):
     """Acronym."""
 
     kod: str = ""
+
+    @override
+    def json_subencode(self) -> dict[str, Any]:
+        return {"kod": self.kod}
 
 
 # <!-- [nom] nomo ne esperantigita, tiuj estas ignorataj dum vortkontrolo  -->
@@ -274,6 +328,10 @@ class Frm(HasTextInContent[Sup | Sub | G | K]):
 
     am: str = ""
 
+    @override
+    def json_subencode(self) -> dict[str, Any]:
+        return {"am": self.am}
+
 
 # <!-- [uzo] La uzo povas esti stilo, fako, regiono aŭ alia klarigo,
 # kiel estas uzata la vorto au termino. Por la fakoj kaj stiloj uzu
@@ -289,6 +347,10 @@ class Uzo(HasTextInContent[Tld]):
 
     tip: str = ""
 
+    @override
+    def json_subencode(self) -> dict[str, Any]:
+        return {"tip": self.tip}
+
 
 # <!ELEMENT mll (#PCDATA|tld|klr|ind)*>
 # <!ATTLIST mll
@@ -299,6 +361,10 @@ class Mll(HasTextInContent["Tld | Klr | Ind"]):
     """An mll element."""
 
     tip: str = ""
+
+    @override
+    def json_subencode(self) -> dict[str, Any]:
+        return {"tip": self.tip}
 
 
 # <!-- [ind] Parto de traduko, kiu liveras la kapvorton en la
@@ -325,6 +391,10 @@ class TrdGrp(HasTextInContent["Trd"]):
 
     lng: str = ""
 
+    @override
+    def json_subencode(self) -> dict[str, Any]:
+        return {"lng": self.lng}
+
 
 # <!-- [trd] Traduko konsistas el traduka vorto aŭ frazo
 # kaj klarigoj, poste povos sekvi aliaj elementoj.
@@ -347,6 +417,10 @@ class Trd(HasTextInContent["Klr | Ind | Pr | Mll | Ofc | Baz"]):
     fnt: str = ""
     kod: str = ""
 
+    @override
+    def json_subencode(self) -> dict[str, Any]:
+        return {"lng": self.lng, "fnt": self.fnt, "kod": self.kod}
+
 
 # <!-- [klr] Klarigo pri vorto, difino, ekzemplo ktp.-->
 # <!ELEMENT klr (#PCDATA|trd|trdgrp|ekz|ref|refgrp|%tekst-stiloj;)*>
@@ -357,6 +431,10 @@ class Klr(HasTextInContent["Trd | TrdGrp | Ekz | Ref | RefGrp | TekstStiloj"]):
     """Clarification."""
 
     tip: str = ""
+
+    @override
+    def json_subencode(self) -> dict[str, Any]:
+        return {"tip": self.tip}
 
 
 # <!-- [ref] Referenco montras al alia, simil- aŭ alisignifa vorto,
@@ -388,6 +466,10 @@ class Ref(HasTextInContent[Tld | Klr | SncRef]):
     lst: str = ""
     val: str = ""
 
+    @override
+    def json_subencode(self) -> dict[str, Any]:
+        return {"tip": self.tip, "cel": self.cel, "lst": self.lst, "val": self.val}
+
 
 # <!-- [ke] Komunlingva esprimo, per kiu oni povas anstataŭigi la (fakan, tre specialan)
 # kapvorton en pli simpla komuna lingvo.
@@ -416,6 +498,10 @@ class RefGrp(HasTextInContent[Ke | Ref]):
 
     tip: str = "vid"
 
+    @override
+    def json_subencode(self) -> dict[str, Any]:
+        return {"tip": self.tip}
+
 
 # <!-- [ekz] Ekzemplo konsistas el ekzemplofrazo,
 # klarigoj kaj fonto.
@@ -432,6 +518,10 @@ class Ekz(
 
     mrk: str = ""
 
+    @override
+    def json_subencode(self) -> dict[str, Any]:
+        return {"mrk": self.mrk}
+
 
 # <!-- [rim] Rimarko povas enhavi iujn indikojn pri la vorto aŭ
 # senco, krome referencojn, ekzemplojn, emfazitajn partojn.
@@ -447,6 +537,10 @@ class Rim(HasTextInContent[Ref | RefGrp | Ke | Ekz | Aut | Fnt | TekstStiloj]):
 
     num: str = ""
     mrk: str = ""
+
+    @override
+    def json_subencode(self) -> dict[str, Any]:
+        return {"num": self.num, "mrk": self.mrk}
 
 
 # <!-- [var] variaĵo de la vorto, ekz. meĥaniko - mekaniko, pomarbo -
@@ -508,6 +602,10 @@ class Mrk(HasTextInContent[Ref]):
     stl: str = ""
     cel: str = ""
 
+    @override
+    def json_subencode(self) -> dict[str, Any]:
+        return {"stl": self.stl, "cel": self.cel}
+
 
 # <!-- [bld] Bildo povas ilustri iun vorton aŭ sencon. Per la
 # atributo <dfn>lok</dfn> ĝi
@@ -537,6 +635,11 @@ class Bld(HasTextInContent[Tld | Klr | Fnt | Mrk | Ind | Trd | TrdGrp]):
     alt: str = ""
     lrg: str = ""
     prm: str = ""
+
+    @override
+    def json_subencode(self) -> dict[str, Any]:
+        return {"lok": self.lok, "mrk": self.mrk, "tip": self.tip,
+                "alt": self.alt, "lrg": self.lrg, "prm": self.prm}
 
 
 # <!-- [adm] Administraj informoj estu por redaktado. Ili povus
@@ -584,6 +687,10 @@ class LstRef(HasTextInContent[Tld | Klr]):
 
     lst: str = ""
 
+    @override
+    def json_subencode(self) -> dict[str, Any]:
+        return {"lst": self.lst}
+
 
 # <!-- [subsnc] Subsenco ene de senco. Ĝi redonas subtilaĵojn ene de unu senco.
 # Ili estas nombrataj per a), b), ... -->
@@ -598,6 +705,10 @@ class SubSnc(HasContent[PriskribajElementoj]):
 
     mrk: str = ""
     ref: str = ""
+
+    @override
+    def json_subencode(self) -> dict[str, Any]:
+        return {"mrk": self.mrk, "ref": self.ref}
 
 
 # <!-- [snc] Senco de unuopa vorto en artikolo. Komparu la latinajn ciferojn en
@@ -620,6 +731,10 @@ class Snc(HasContent[SubSnc | PriskribajElementoj]):
     num: str = ""
     ref: str = ""
 
+    @override
+    def json_subencode(self) -> dict[str, Any]:
+        return {"mrk": self.mrk, "num": self.num, "ref": self.ref}
+
 
 # <!-- [dif] Difino estas la frazo difinanta la vorton, sencon aŭ
 # subsencon. Ĝi povas esti ankaŭ en alia(j) lingvo(j) ol la vorto
@@ -634,6 +749,10 @@ class Dif(HasTextInContent[Trd | TrdGrp | Ref | RefGrp | Ke | Ekz | Snc | TekstS
     """Definition."""
 
     lng: str = ""
+
+    @override
+    def json_subencode(self) -> dict[str, Any]:
+        return {"lng": self.lng}
 
 
 # <!-- [kap] kapvorto okazas en du kuntekstoj - komence de artikolo
@@ -662,6 +781,10 @@ class SubDrv(HasContent[Snc | PriskribajElementoj]):
 
     mrk: str = ""
 
+    @override
+    def json_subencode(self) -> dict[str, Any]:
+        return {"mrk": self.mrk}
+
 
 # <!-- [drv] Derivaĵo ene de artikolo. Unu artikolo povas priskribi plurajn
 # derivaĵojn de la kapvorto. Derivaĵo komenciĝas ja kapvorto kaj
@@ -677,6 +800,10 @@ class Drv(HasKap, HasContent[SubDrv | Snc | PriskribajElementoj]):
 
     mrk: str = ""
 
+    @override
+    def json_subencode(self) -> dict[str, Any]:
+        return {"mrk": self.mrk}
+
 
 # <!-- [subart] Subartikolo. Ĝi povas okazi en <dfn>artikolo</dfn>,
 # se la signifoj de vorto (ofte ĉe prepozicioj kaj afiksoj) estas
@@ -690,6 +817,10 @@ class SubArt(HasContent[Drv | Snc | PriskribajElementoj]):
     """Subarticle."""
 
     mrk: str = ""
+
+    @override
+    def json_subencode(self) -> dict[str, Any]:
+        return {"mrk": self.mrk}
 
 
 # <!-- [art] Unuopa artikolo de la vortaro. Ĝi povas okazi en
@@ -707,6 +838,10 @@ class Art(HasKap, HasContent[SubArt | Drv | Snc | PriskribajElementoj]):
     """Article."""
 
     mrk: str = ""
+
+    @override
+    def json_subencode(self) -> dict[str, Any]:
+        return {"mrk": self.mrk}
 
 
 # <!-- [vortaro] Radiko de la strukturarbo de vortaro. La elemento ampleksas
@@ -834,6 +969,7 @@ def element_for(qname: str) -> Element:
         case _:
             raise ValueError(f"Unknown element: {qname}")
 
+
 ELEMENT_TYPES: dict[str, type] = {
     # Keep elements sorted
     "adm": Adm,
@@ -890,3 +1026,14 @@ ELEMENT_TYPES: dict[str, type] = {
     "vrk": Vrk,
     "vspec": VSpec,
 }
+
+QNAME_BY_TYPE: dict[type, str] = {v: k for k, v in ELEMENT_TYPES.items()}
+
+
+def encode_as_json(element: Element) -> dict[str, Any]:
+    """Custom json encorder for elements."""
+    if isinstance(element, TextOnlyElement):
+        return {QNAME_BY_TYPE[type(element)]: element.text}
+    if isinstance(element, HasContent):
+        return {}
+    return dataclasses.asdict(element)
