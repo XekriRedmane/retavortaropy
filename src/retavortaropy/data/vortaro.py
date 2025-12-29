@@ -9,7 +9,11 @@ from typing import cast, override, Any, TypeVar
 
 @dataclasses.dataclass
 class Element(abc.ABC):
-    """Any element."""
+    """
+    Any element.
+
+    JSON representation: {}
+    """
 
     def json_encode(self) -> dict[str, Any]:
         """Encodes the element as a dict for json."""
@@ -25,12 +29,19 @@ T = TypeVar("T", bound=Element)
 
 @dataclasses.dataclass
 class TextOnlyElement(Element):
-    """An element that contains only text."""
+    """
+    An element that contains only text.
+
+    JSON representation: {QNAME: {"text": "..."}}
+    """
 
     text: str = ""
 
     @override
     def json_encode(self) -> dict[str, Any]:
+        if type(self) is TextOnlyElement:
+            return {"text": self.text}
+
         data = {"text": self.text}
         data.update(self.json_subencode())
         qname = QNAME_BY_TYPE[type(self)]
@@ -39,7 +50,11 @@ class TextOnlyElement(Element):
 
 @dataclasses.dataclass
 class HasContent[T](Element):
-    """An element that contains an ordered list of elements."""
+    """
+    An element that contains an ordered list of elements.
+
+    JSON representation: {QNAME: {"content": [...]}}
+    """
 
     content: list[T] = dataclasses.field(default_factory=list[T])
 
@@ -65,12 +80,20 @@ class HasContent[T](Element):
 
 @dataclasses.dataclass
 class HasTextInContent[T](HasContent[TextOnlyElement | T]):
-    """An element that contains an ordered list of elements, interspersed with text."""
+    """
+    An element that contains an ordered list of elements, interspersed with text.
+
+    JSON representation: {QNAME: {"content": [...]}}
+    """
 
 
 @dataclasses.dataclass
 class HasKap:
-    """An element that has a kap (rootword) element."""
+    """
+    An element that has a kap (rootword) element.
+
+    JSON representation: Adds "kap": {...} to the dictionary.
+    """
 
     kap: Kap | None = None
 
@@ -107,7 +130,11 @@ type PriskribajElementoj = (
 # >
 @dataclasses.dataclass
 class Rad(TextOnlyElement):
-    """Root of a headword."""
+    """
+    Root of a headword.
+
+    JSON representation: {"rad": {"text": "...", "var": "..."}}
+    """
 
     var: str = ""
 
@@ -121,7 +148,11 @@ class Rad(TextOnlyElement):
 # <!ELEMENT ofc (#PCDATA)>
 @dataclasses.dataclass
 class Ofc(TextOnlyElement):
-    """Officiality of a headword or derivation."""
+    """
+    Officiality of a headword or derivation.
+
+    JSON representation: {"ofc": {"text": "..."}}
+    """
 
 
 # <!-- [bib] Bibliografia indiko por fonto, estas mallongigo el
@@ -131,14 +162,22 @@ class Ofc(TextOnlyElement):
 # <!ELEMENT bib (#PCDATA)>
 @dataclasses.dataclass
 class Bib(TextOnlyElement):
-    """Short bibilographic reference for a source."""
+    """
+    Short bibilographic reference for a source.
+
+    JSON representation: {"bib": {"text": "..."}}
+    """
 
 
 # <!-- [aut] Aŭtoro de citita frazo aŭ verko -->
 # <!ELEMENT aut (#PCDATA)>
 @dataclasses.dataclass
 class Aut(TextOnlyElement):
-    """Author of a phrase or work."""
+    """
+    Author of a phrase or work.
+
+    JSON representation: {"aut": {"text": "..."}}
+    """
 
 
 # <!ELEMENT url (#PCDATA)>
@@ -146,7 +185,11 @@ class Aut(TextOnlyElement):
 #           ref CDATA #IMPLIED>
 @dataclasses.dataclass
 class Url(TextOnlyElement):
-    """A URL."""
+    """
+    A URL.
+
+    JSON representation: {"url": {"text": "...", "ref": "..."}}
+    """
 
     ref: str = ""
 
@@ -159,14 +202,22 @@ class Url(TextOnlyElement):
 # <!ELEMENT lok (#PCDATA|url)*>
 @dataclasses.dataclass
 class Lok(HasTextInContent[Url]):
-    """The location of a citation within a work."""
+    """
+    The location of a citation within a work.
+
+    JSON representation: {"lok": {"content": [...]}}
+    """
 
 
 # <!-- [vrk] Verko, en kiu troviĝas citita frazo aŭ vorto -->
 # <!ELEMENT vrk (#PCDATA|url)*>
 @dataclasses.dataclass
 class Vrk(HasTextInContent[Url]):
-    """A work containing a citation."""
+    """
+    A work containing a citation.
+
+    JSON representation: {"vrk": {"content": [...]}}
+    """
 
 
 # <!-- [fnt] Fonto enhavas informojn pri autoro, verko, trovloko
@@ -174,7 +225,11 @@ class Vrk(HasTextInContent[Url]):
 # <!ELEMENT fnt (#PCDATA|bib|aut|vrk|lok|url)*>
 @dataclasses.dataclass
 class Fnt(HasTextInContent[Bib | Aut | Vrk | Lok | Url]):
-    """A source for a citation."""
+    """
+    A source for a citation.
+
+    JSON representation: {"fnt": {"content": [...]}}
+    """
 
 
 # <!-- [tld] Tildo rilatas al la radiko, donita en la kapvorto
@@ -189,7 +244,11 @@ class Fnt(HasTextInContent[Bib | Aut | Vrk | Lok | Url]):
 # >
 @dataclasses.dataclass
 class Tld(Element):
-    """The "tilde" replacement for a root."""
+    """
+    The "tilde" replacement for a root.
+
+    JSON representation: {"tld": {"lit": "...", "var": "..."}}
+    """
 
     lit: str = ""
     var: str = ""
@@ -209,7 +268,11 @@ class Tld(Element):
 # >
 @dataclasses.dataclass
 class TezRad(Element):
-    """A thesaurus root."""
+    """
+    A thesaurus root.
+
+    JSON representation: {"tezrad": {"fak": "..."}}
+    """
 
     fak: str = ""
 
@@ -229,7 +292,11 @@ class TezRad(Element):
 # >
 @dataclasses.dataclass
 class SncRef(Element):
-    """Reference to another sense of a word."""
+    """
+    Reference to another sense of a word.
+
+    JSON representation: {"sncref": {"ref": "..."}}
+    """
 
     ref: str = ""
 
@@ -243,7 +310,11 @@ class SncRef(Element):
 # <!ELEMENT g (#PCDATA)>
 @dataclasses.dataclass
 class G(TextOnlyElement):
-    """Bold."""
+    """
+    Bold.
+
+    JSON representation: {"g": {"text": "..."}}
+    """
 
 
 # <!-- [k] Kursiva parto de formulo, ekz. variablo k.s.,
@@ -251,7 +322,11 @@ class G(TextOnlyElement):
 # <!ELEMENT k (#PCDATA)>
 @dataclasses.dataclass
 class K(TextOnlyElement):
-    """Italic."""
+    """
+    Italic.
+
+    JSON representation: {"k": {"text": "..."}}
+    """
 
 
 # <!-- [mlg] mallongigo de la kapvorto, ekz. che nomoj de organizajhoj.
@@ -261,7 +336,11 @@ class K(TextOnlyElement):
 #           kod CDATA #IMPLIED>
 @dataclasses.dataclass
 class Mlg(TextOnlyElement):
-    """Acronym."""
+    """
+    Acronym.
+
+    JSON representation: {"mlg": {"text": "...", "kod": "..."}}
+    """
 
     kod: str = ""
 
@@ -274,14 +353,22 @@ class Mlg(TextOnlyElement):
 # <!ELEMENT nom (#PCDATA)>
 @dataclasses.dataclass
 class Nom(TextOnlyElement):
-    """A name."""
+    """
+    A name.
+
+    JSON representation: {"nom": {"text": "..."}}
+    """
 
 
 # <!-- [nac] nacilingva vorto aŭ esprimo, tiuj estas ignorataj dum vortkontrolo  -->
 # <!ELEMENT nac (#PCDATA)>
 @dataclasses.dataclass
 class Nac(TextOnlyElement):
-    """A native language word or expression."""
+    """
+    A native language word or expression.
+
+    JSON representation: {"nac": {"text": "..."}}
+    """
 
 
 # <!-- [esc] escepte formita (laŭ vidpunkto de vortanalizila gramatiko)
@@ -289,35 +376,55 @@ class Nac(TextOnlyElement):
 # <!ELEMENT esc (#PCDATA)>
 @dataclasses.dataclass
 class Esc(TextOnlyElement):
-    """Exceptional form."""
+    """
+    Exceptional form.
+
+    JSON representation: {"esc": {"text": "..."}}
+    """
 
 
 # <!-- [em] Emfazo. Normale grase skribata vortoj.-->
 # <!ELEMENT em (#PCDATA|tld)*>
 @dataclasses.dataclass
 class Em(HasTextInContent[Tld]):
-    """Emphasis."""
+    """
+    Emphasis.
+
+    JSON representation: {"em": {"content": [...]}}
+    """
 
 
 # <!-- [ts] trastrekita teksto, ekz-e por montri korekton de misskribita ekzemplo -->
 # <!ELEMENT ts (#PCDATA|tld)*>
 @dataclasses.dataclass
 class Ts(HasTextInContent[Tld]):
-    """Strikethrough."""
+    """
+    Strikethrough.
+
+    JSON representation: {"ts": {"content": [...]}}
+    """
 
 
 # <!-- [sup] altigita teksto, ekz. en ĥemiaj formuloj -->
 # <!ELEMENT sup (#PCDATA|g|k)*>
 @dataclasses.dataclass
 class Sup(HasTextInContent[G | K]):
-    """Superscript."""
+    """
+    Superscript.
+
+    JSON representation: {"sup": {"content": [...]}}
+    """
 
 
 # <!-- [sub] malaltigita teksto, ekz. en ĥemiaj formuloj -->
 # <!ELEMENT sub (#PCDATA|g|k)*>
 @dataclasses.dataclass
 class Sub(HasTextInContent[G | K]):
-    """Subscript."""
+    """
+    Subscript.
+
+    JSON representation: {"sub": {"content": [...]}}
+    """
 
 
 # <!-- [frm] Matematika au kemia formulo, por matematikaj formuloj oni povas
@@ -327,7 +434,11 @@ class Sub(HasTextInContent[G | K]):
 #           am CDATA #IMPLIED>
 @dataclasses.dataclass
 class Frm(HasTextInContent[Sup | Sub | G | K]):
-    """Mathematical or chemical formula."""
+    """
+    Mathematical or chemical formula.
+
+    JSON representation: {"frm": {"content": [...], "am": "..."}}
+    """
 
     am: str = ""
 
@@ -346,7 +457,11 @@ class Frm(HasTextInContent[Sup | Sub | G | K]):
 # >
 @dataclasses.dataclass
 class Uzo(HasTextInContent[Tld]):
-    """Field of usage."""
+    """
+    Field of usage.
+
+    JSON representation: {"uzo": {"content": [...], "tip": "..."}}
+    """
 
     tip: str = ""
 
@@ -361,7 +476,11 @@ class Uzo(HasTextInContent[Tld]):
 # >
 @dataclasses.dataclass
 class Mll(HasTextInContent["Tld | Klr | Ind"]):
-    """An mll element."""
+    """
+    An mll element.
+
+    JSON representation: {"mll": {"content": [...], "tip": "..."}}
+    """
 
     tip: str = ""
 
@@ -378,7 +497,11 @@ class Mll(HasTextInContent["Tld | Klr | Ind"]):
 # <!ELEMENT ind (#PCDATA|tld|klr|mll)*>
 @dataclasses.dataclass
 class Ind(HasTextInContent["Tld | Klr | Mll"]):
-    """Index."""
+    """
+    Index.
+
+    JSON representation: {"ind": {"content": [...]}}
+    """
 
 
 # <!-- [trdgrp] Tradukgrupo kunigas diversajn tradukojn de
@@ -390,7 +513,11 @@ class Ind(HasTextInContent["Tld | Klr | Mll"]):
 # >
 @dataclasses.dataclass
 class TrdGrp(HasTextInContent["Trd"]):
-    """Translation group."""
+    """
+    Translation group.
+
+    JSON representation: {"trdgrp": {"content": [...], "lng": "..."}}
+    """
 
     lng: str = ""
 
@@ -414,7 +541,11 @@ class TrdGrp(HasTextInContent["Trd"]):
 # >
 @dataclasses.dataclass
 class Trd(HasTextInContent["Klr | Ind | Pr | Mll | Ofc | Baz"]):
-    """Translation."""
+    """
+    Translation.
+
+    JSON representation: {"trd": {"content": [...], "lng": "...", "fnt": "...", "kod": "..."}}
+    """
 
     lng: str = ""
     fnt: str = ""
@@ -431,7 +562,11 @@ class Trd(HasTextInContent["Klr | Ind | Pr | Mll | Ofc | Baz"]):
 #             tip (ind|amb) #IMPLIED>
 @dataclasses.dataclass
 class Klr(HasTextInContent["Trd | TrdGrp | Ekz | Ref | RefGrp | TekstStiloj"]):
-    """Clarification."""
+    """
+    Clarification.
+
+    JSON representation: {"klr": {"content": [...], "tip": "..."}}
+    """
 
     tip: str = ""
 
@@ -462,7 +597,11 @@ class Klr(HasTextInContent["Trd | TrdGrp | Ekz | Ref | RefGrp | TekstStiloj"]):
 # >
 @dataclasses.dataclass
 class Ref(HasTextInContent[Tld | Klr | SncRef]):
-    """A reference."""
+    """
+    A reference.
+
+    JSON representation: {"ref": {"content": [...], "tip": "...", "cel": "...", "lst": "...", "val": "..."}}
+    """
 
     tip: str = ""
     cel: str = ""
@@ -483,7 +622,11 @@ class Ref(HasTextInContent[Tld | Klr | SncRef]):
 # <!ELEMENT ke (#PCDATA | ref)*>
 @dataclasses.dataclass
 class Ke(HasTextInContent[Ref]):
-    """Common-language expression."""
+    """
+    Common-language expression.
+
+    JSON representation: {"ke": {"content": [...]}}
+    """
 
 
 # <!-- [refgrp] Referencgrupo grupigas plurajn samtipajn
@@ -497,7 +640,11 @@ class Ke(HasTextInContent[Ref]):
 # >
 @dataclasses.dataclass
 class RefGrp(HasTextInContent[Ke | Ref]):
-    """Reference group."""
+    """
+    Reference group.
+
+    JSON representation: {"refgrp": {"content": [...], "tip": "..."}}
+    """
 
     tip: str = "vid"
 
@@ -517,7 +664,11 @@ class RefGrp(HasTextInContent[Ke | Ref]):
 class Ekz(
     HasTextInContent[Fnt | Uzo | Ref | RefGrp | Ind | Trd | TrdGrp | TekstStiloj]
 ):
-    """Example."""
+    """
+    Example.
+
+    JSON representation: {"ekz": {"content": [...], "mrk": "..."}}
+    """
 
     mrk: str = ""
 
@@ -536,7 +687,11 @@ class Ekz(
 # >
 @dataclasses.dataclass
 class Rim(HasTextInContent[Ref | RefGrp | Ke | Ekz | Aut | Fnt | TekstStiloj]):
-    """Remark."""
+    """
+    Remark.
+
+    JSON representation: {"rim": {"content": [...], "num": "...", "mrk": "..."}}
+    """
 
     num: str = ""
     mrk: str = ""
@@ -554,7 +709,11 @@ class Rim(HasTextInContent[Ref | RefGrp | Ke | Ekz | Aut | Fnt | TekstStiloj]):
 # <!ELEMENT var (kap,(uzo|klr|ekz|rim)*)>
 @dataclasses.dataclass
 class Var(HasKap, HasContent[Uzo | Klr | Ekz | Rim]):
-    """Variation of a headword."""
+    """
+    Variation of a headword.
+
+    JSON representation: {"var": {"content": [...], "kap": {...}}}
+    """
 
 
 # <!-- [vspec] Vortspeco. Ekz. subst. por substantivo; tr./ntr.
@@ -562,7 +721,11 @@ class Var(HasKap, HasContent[Uzo | Klr | Ekz | Rim]):
 # <!ELEMENT vspec (#PCDATA)>
 @dataclasses.dataclass
 class VSpec(TextOnlyElement):
-    """Word type."""
+    """
+    Word type.
+
+    JSON representation: {"vspec": {"text": "..."}}
+    """
 
 
 # <!-- [gra] kiel grammatikaj informoj momente estas permesataj
@@ -570,21 +733,33 @@ class VSpec(TextOnlyElement):
 # <!ELEMENT gra (#PCDATA|vspec)*>
 @dataclasses.dataclass
 class Gra(HasTextInContent[VSpec]):
-    """Grammatical information."""
+    """
+    Grammatical information.
+
+    JSON representation: {"gra": {"content": [...]}}
+    """
 
 
 # <!-- [ctl] citilita teksto, ekz. memindika uzo de vorto -->
 # <!ELEMENT ctl (#PCDATA|tld|em|ts|frm|nom|nac|esc)*>
 @dataclasses.dataclass
 class Ctl(HasTextInContent[Tld | Em | Ts | Frm | Nom | Nac | Esc]):
-    """Cited text."""
+    """
+    Cited text.
+
+    JSON representation: {"ctl": {"content": [...]}}
+    """
 
 
 # <!-- [mis] mislingva teksto, ni prezentos inter asteriskoj -->
 # <!ELEMENT mis (#PCDATA|tld|em|ts|frm|nom|nac|esc)*>
 @dataclasses.dataclass
 class Mis(HasTextInContent[Tld | Em | Ts | Frm | Nom | Nac | Esc]):
-    """Ungrammatical text."""
+    """
+    Ungrammatical text.
+
+    JSON representation: {"mis": {"content": [...]}}
+    """
 
 
 # <!-- [mrk] Per la elemento <dfn>mrk</dfn> oni povas marki lokon en bildo per ia
@@ -600,7 +775,11 @@ class Mis(HasTextInContent[Tld | Em | Ts | Frm | Nom | Nac | Esc]):
 # >
 @dataclasses.dataclass
 class Mrk(HasTextInContent[Ref]):
-    """Marker."""
+    """
+    Marker.
+
+    JSON representation: {"mrk": {"content": [...], "stl": "...", "cel": "..."}}
+    """
 
     stl: str = ""
     cel: str = ""
@@ -630,7 +809,11 @@ class Mrk(HasTextInContent[Ref]):
 # >
 @dataclasses.dataclass
 class Bld(HasTextInContent[Tld | Klr | Fnt | Mrk | Ind | Trd | TrdGrp]):
-    """Image."""
+    """
+    Image.
+
+    JSON representation: {"bld": {"content": [...], "lok": "...", "mrk": "...", "tip": "...", "alt": "...", "lrg": "...", "prm": "..."}}
+    """
 
     lok: str = ""
     mrk: str = ""
@@ -653,7 +836,11 @@ class Bld(HasTextInContent[Tld | Klr | Fnt | Mrk | Ind | Trd | TrdGrp]):
 # <!ELEMENT adm (#PCDATA|aut)*>
 @dataclasses.dataclass
 class Adm(HasTextInContent[Aut]):
-    """Editor's comment."""
+    """
+    Editor's comment.
+
+    JSON representation: {"adm": {"content": [...]}}
+    """
 
 
 # <!-- [pr] Prononco/transskribo, kiel oni uzas por japanaj lingvoj (pinjino, bopomofo, hiragano ks)
@@ -666,7 +853,11 @@ class Adm(HasTextInContent[Aut]):
 # <!ELEMENT pr (#PCDATA)>
 @dataclasses.dataclass
 class Pr(TextOnlyElement):
-    """Pronunciation."""
+    """
+    Pronunciation.
+
+    JSON representation: {"pr": {"text": "..."}}
+    """
 
 
 # <!-- [baz] Baza formo de traduko, sub kiu la vorto subordiĝos en la indekso. Tion ni uzas
@@ -675,7 +866,11 @@ class Pr(TextOnlyElement):
 # <!ELEMENT baz (#PCDATA)>
 @dataclasses.dataclass
 class Baz(TextOnlyElement):
-    """Base form of a translation."""
+    """
+    Base form of a translation.
+
+    JSON representation: {"baz": {"text": "..."}}
+    """
 
 
 # <!-- [lstref] Referenco al vortlisto el artikolo.
@@ -686,7 +881,11 @@ class Baz(TextOnlyElement):
 # >
 @dataclasses.dataclass
 class LstRef(HasTextInContent[Tld | Klr]):
-    """Reference to a word list."""
+    """
+    Reference to a word list.
+
+    JSON representation: {"lstref": {"content": [...], "lst": "..."}}
+    """
 
     lst: str = ""
 
@@ -704,7 +903,11 @@ class LstRef(HasTextInContent[Tld | Klr]):
 # >
 @dataclasses.dataclass
 class SubSnc(HasContent[PriskribajElementoj]):
-    """Subsense."""
+    """
+    Subsense.
+
+    JSON representation: {"subsnc": {"content": [...], "mrk": "...", "ref": "..."}}
+    """
 
     mrk: str = ""
     ref: str = ""
@@ -728,7 +931,11 @@ class SubSnc(HasContent[PriskribajElementoj]):
 # >
 @dataclasses.dataclass
 class Snc(HasContent[SubSnc | PriskribajElementoj]):
-    """Sense."""
+    """
+    Sense.
+
+    JSON representation: {"snc": {"content": [...], "mrk": "...", "num": "...", "ref": "..."}}
+    """
 
     mrk: str = ""
     num: str = ""
@@ -749,7 +956,11 @@ class Snc(HasContent[SubSnc | PriskribajElementoj]):
 # >
 @dataclasses.dataclass
 class Dif(HasTextInContent[Trd | TrdGrp | Ref | RefGrp | Ke | Ekz | Snc | TekstStiloj]):
-    """Definition."""
+    """
+    Definition.
+
+    JSON representation: {"dif": {"content": [...], "lng": "..."}}
+    """
 
     lng: str = ""
 
@@ -767,7 +978,11 @@ class Dif(HasTextInContent[Trd | TrdGrp | Ref | RefGrp | Ke | Ekz | Snc | TekstS
 # <!ELEMENT kap (#PCDATA|rad|ofc|fnt|tld|var)*>
 @dataclasses.dataclass
 class Kap(HasTextInContent[Rad | Ofc | Fnt | Tld | Var]):
-    """Headword."""
+    """
+    Headword.
+
+    JSON representation: {"kap": {"content": [...]}}
+    """
 
 
 # <!-- [subdrv] Subderivaĵo. Ĝi grupigas plurajn proksimajn sencojn, se la
@@ -780,7 +995,11 @@ class Kap(HasTextInContent[Rad | Ofc | Fnt | Tld | Var]):
 # >
 @dataclasses.dataclass
 class SubDrv(HasContent[Snc | PriskribajElementoj]):
-    """Subderivation."""
+    """
+    Subderivation.
+
+    JSON representation: {"subdrv": {"content": [...], "mrk": "..."}}
+    """
 
     mrk: str = ""
 
@@ -799,7 +1018,11 @@ class SubDrv(HasContent[Snc | PriskribajElementoj]):
 # >
 @dataclasses.dataclass
 class Drv(HasKap, HasContent[SubDrv | Snc | PriskribajElementoj]):
-    """Derivation."""
+    """
+    Derivation.
+
+    JSON representation: {"drv": {"content": [...], "kap": {...}, "mrk": "..."}}
+    """
 
     mrk: str = ""
 
@@ -817,7 +1040,11 @@ class Drv(HasKap, HasContent[SubDrv | Snc | PriskribajElementoj]):
 # >
 @dataclasses.dataclass
 class SubArt(HasContent[Drv | Snc | PriskribajElementoj]):
-    """Subarticle."""
+    """
+    Subarticle.
+
+    JSON representation: {"subart": {"content": [...], "mrk": "..."}}
+    """
 
     mrk: str = ""
 
@@ -838,7 +1065,11 @@ class SubArt(HasContent[Drv | Snc | PriskribajElementoj]):
 # >
 @dataclasses.dataclass
 class Art(HasKap, HasContent[SubArt | Drv | Snc | PriskribajElementoj]):
-    """Article."""
+    """
+    Article.
+
+    JSON representation: {"art": {"content": [...], "kap": {...}, "mrk": "..."}}
+    """
 
     mrk: str = ""
 
@@ -859,7 +1090,11 @@ class Art(HasKap, HasContent[SubArt | Drv | Snc | PriskribajElementoj]):
 # -->
 @dataclasses.dataclass
 class Vortaro(HasContent[Art]):
-    """Dictionary entry."""
+    """
+    Dictionary entry.
+
+    JSON representation: {"vortaro": {"content": [...]}}
+    """
 
 
 def element_for(qname: str) -> Element:
