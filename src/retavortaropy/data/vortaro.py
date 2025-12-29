@@ -31,7 +31,10 @@ class TextOnlyElement(Element):
 
     @override
     def json_encode(self) -> dict[str, Any]:
-        return {"text": self.text}
+        data = {"text": self.text}
+        data.update(self.json_subencode())
+        qname = QNAME_BY_TYPE[type(self)]
+        return {qname: data}
 
 
 @dataclasses.dataclass
@@ -111,12 +114,6 @@ class Rad(TextOnlyElement):
     @override
     def json_subencode(self) -> dict[str, Any]:
         return {"var": self.var}
-
-    @override
-    def json_encode(self) -> dict[str, Any]:
-        data = {"text": self.text}
-        data.update(self.json_subencode())
-        return {"rad": data}
 
 
 # <!-- [ofc] Oficialeco de la kapvorto/derivajho,
