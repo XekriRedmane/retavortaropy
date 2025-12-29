@@ -112,6 +112,12 @@ class Rad(TextOnlyElement):
     def json_subencode(self) -> dict[str, Any]:
         return {"var": self.var}
 
+    @override
+    def json_encode(self) -> dict[str, Any]:
+        data = {"text": self.text}
+        data.update(self.json_subencode())
+        return {"rad": data}
+
 
 # <!-- [ofc] Oficialeco de la kapvorto/derivajho,
 #   povas esti *, 1, ..., 8 kiel en PIV -->
@@ -912,6 +918,8 @@ def element_for(qname: str) -> Element:
             return Mis()
         case "mlg":
             return Mlg()
+        case "mll":
+            return Mll()
         case "mrk":
             return Mrk()
         case "nac":
