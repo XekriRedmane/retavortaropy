@@ -1,6 +1,7 @@
 """Utility functions for processing vortaro elements."""
 
 from typing import Any
+from jsonpath_ng import parse
 from retavortaropy.data import vortaro
 
 def find_uzos_with_kaps(element: vortaro.Element) -> list[tuple[vortaro.Uzo, vortaro.Kap | None]]:
@@ -112,21 +113,11 @@ def json_get_closest_rad_text(root_dict: dict[str, Any]) -> str | None:
     Returns:
         The text of the Rad element, or None if not found.
     """
-    if "vortaro" not in root_dict:
-        return None
+    # Double kap because HasKap logic wraps it, and Kap itself returns {kap: ...}
+    # Structure: vortaro -> content -> [ {art: {kap: {kap: {content: [ {rad: {text: ...}} ]}}}} ]
+    jsonpath_expression = parse("$.vortaro.content[*].art.kap.kap.content[*].rad.text")
+    matches = jsonpath_expression.find(root_dict)
 
-    vortaro_content = root_dict["vortaro"].get("content", [])
-    for item in vortaro_content:
-        if "art" in item:
-            art = item["art"]
-            # Art has "kap" field directly if it exists (via HasKap logic in json_encode)
-            if "kap" in art:
-                kap_wrapper = art["kap"]
-                if "kap" in kap_wrapper:
-                    kap = kap_wrapper["kap"]
-                    # Kap has "content"
-                    kap_content = kap.get("content", [])
-                    for kap_item in kap_content:
-                        if "rad" in kap_item:
-                            return kap_item["rad"].get("text", "")
+    if matches:
+        return matches[0].value
     return None
