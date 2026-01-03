@@ -183,6 +183,16 @@ def process_snc_list(
                             if dif_text:
                                 result[sense_num] = dif_text
                             break
+                    elif "ref" in content_item:
+                        # Check if this is a ref with tip="dif"
+                        ref_data = content_item["ref"]
+                        if ref_data.get("tip") == "dif":
+                            # Treat this ref as a definition
+                            dif_data = {"content": [content_item]}
+                            dif_text = extract_dif_text(dif_data, rad_text, variant_rads)
+                            if dif_text:
+                                result[sense_num] = dif_text
+                            break
 
             # Process any nested snc/subsnc elements recursively
             if "content" in snc_data:
