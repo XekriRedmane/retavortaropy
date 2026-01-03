@@ -3,6 +3,7 @@ Command line tool to extract rad values from all XML files in a directory.
 Creates a dictionary mapping rad text to XML file paths.
 Includes both base rads and variant rads.
 """
+
 import argparse
 import json
 import pathlib
@@ -106,12 +107,13 @@ def main() -> None:
         "path",
         nargs="?",
         default="f:/revo-fonto/revo",
-        help="Directory containing XML files or single XML file"
+        help="Directory containing XML files or single XML file",
     )
     parser.add_argument(
-        "-o", "--output",
+        "-o",
+        "--output",
         default="rad_dictionary.json",
-        help="Output JSON file path (default: rad_dictionary.json)"
+        help="Output JSON file path (default: rad_dictionary.json)",
     )
     args = parser.parse_args()
 

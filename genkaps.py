@@ -3,6 +3,7 @@ Command line tool to extract drv kap values from all XML files in a directory.
 Creates a dictionary mapping kap text to XML file paths.
 Handles variants by expanding them into separate kap entries.
 """
+
 import argparse
 import json
 import pathlib
@@ -23,18 +24,18 @@ def get_variant_rads(root_dict: dict[str, Any]) -> dict[str, str]:
     Returns a dict mapping var attribute values to rad text.
     """
     variant_rads: dict[str, str] = {}
-    
+
     try:
         vortaro = root_dict.get("vortaro", {})
         content = vortaro.get("content", [])
-        
+
         for item in content:
             if "art" in item:
                 art_data = item["art"]
                 kap_wrapper = art_data.get("kap", {})
                 kap_data = kap_wrapper.get("kap", {})
                 kap_content = kap_data.get("content", [])
-                
+
                 for kap_item in kap_content:
                     if "rad" in kap_item:
                         rad_data = kap_item["rad"]
@@ -58,12 +59,16 @@ def get_variant_rads(root_dict: dict[str, Any]) -> dict[str, str]:
                                             variant_rads[var_attr] = text
     except Exception:
         pass
-    
+
     return variant_rads
 
 
-def get_json_kap_text(kap_dict: dict[str, Any], rad_text: str | None,
-                      variant_rads: dict[str, str] | None = None, include_vars: bool = True) -> list[str]:
+def get_json_kap_text(
+    kap_dict: dict[str, Any],
+    rad_text: str | None,
+    variant_rads: dict[str, str] | None = None,
+    include_vars: bool = True,
+) -> list[str]:
     """
     Reconstructs kap text(s) from JSON, processing tld and variants.
     Returns list of kap texts (base kap + any variants).
@@ -91,13 +96,13 @@ def get_json_kap_text(kap_dict: dict[str, Any], rad_text: str | None,
                 tld_data = item["tld"]
                 lit = tld_data.get("lit", "")
                 var = tld_data.get("var", "")
-                
+
                 # Use variant rad if var attribute is present
                 if var and var in variant_rads:
                     rad_to_use = variant_rads[var]
                 else:
                     rad_to_use = rad_text
-                
+
                 if lit:
                     base_parts.append(lit + rad_to_use[1:])
                 else:
@@ -112,11 +117,13 @@ def get_json_kap_text(kap_dict: dict[str, Any], rad_text: str | None,
                 var_kap_wrapper = var_data["kap"]
                 if "kap" in var_kap_wrapper:
                     var_kap_inner = var_kap_wrapper["kap"]
-                    var_texts = get_json_kap_text(var_kap_inner, rad_text, variant_rads, include_vars=False)
+                    var_texts = get_json_kap_text(
+                        var_kap_inner, rad_text, variant_rads, include_vars=False
+                    )
                     variants.extend(var_texts)
 
     base_text: str = "".join(base_parts).strip()
-    base_text = re.sub(r'[,;]\s*$', '', base_text).strip()
+    base_text = re.sub(r"[,;]\s*$", "", base_text).strip()
 
     result: list[str] = []
     if base_text:
@@ -142,14 +149,14 @@ def process_file(xml_path: pathlib.Path, parser: etree.XMLParser) -> dict[str, s
         rad_text: str | None = utils.json_get_closest_rad_text(root_dict)
         variant_rads: dict[str, str] = get_variant_rads(root_dict)
 
-        jsonpath_expression = parse('$..drv')
+        jsonpath_expression = parse("$..drv")
         matches = jsonpath_expression.find(root_dict)
 
         for match in matches:
             drv_data = match.value
-            kap_wrapper = drv_data.get('kap')
-            if kap_wrapper and 'kap' in kap_wrapper:
-                kap_inner = kap_wrapper['kap']
+            kap_wrapper = drv_data.get("kap")
+            if kap_wrapper and "kap" in kap_wrapper:
+                kap_inner = kap_wrapper["kap"]
                 kap_texts = get_json_kap_text(kap_inner, rad_text, variant_rads)
                 for kap_text in kap_texts:
                     if kap_text:
@@ -166,15 +173,10 @@ def main() -> None:
         description="Extract drv kap values from Revo XML files."
     )
     parser.add_argument(
-        "path",
-        nargs="?",
-        default="f:/revo-fonto/revo",
-        help="Directory or file"
+        "path", nargs="?", default="f:/revo-fonto/revo", help="Directory or file"
     )
     parser.add_argument(
-        "-o", "--output",
-        default="kap_dictionary.json",
-        help="Output JSON file"
+        "-o", "--output", default="kap_dictionary.json", help="Output JSON file"
     )
     args = parser.parse_args()
 

@@ -1,6 +1,7 @@
 """
 Script to process all XML files in a directory, convert to JSON, and extract filtered drv kaps.
 """
+
 import argparse
 import pathlib
 from typing import Any
@@ -11,10 +12,12 @@ from tqdm import tqdm
 
 from retavortaropy.main import DTDResolver, RevoContentHandler
 from retavortaropy import utils
+
 # Ensure we have the necessary classes available for the handler
 from retavortaropy.data import vortaro
 
 FAK = "MIN"
+
 
 def get_json_kap_text(kap_dict: dict[str, Any], rad_text: str | None) -> str:
     """
@@ -52,6 +55,7 @@ def get_json_kap_text(kap_dict: dict[str, Any], rad_text: str | None) -> str:
 
     return "".join(parts)
 
+
 def get_simple_text_content(element_dict: dict[str, Any]) -> str:
     """
     Extracts simple text content from an element dictionary (like Uzo).
@@ -66,6 +70,7 @@ def get_simple_text_content(element_dict: dict[str, Any]) -> str:
             elif isinstance(v, dict) and "text" in v:
                 parts.append(v["text"])
     return "".join(parts)
+
 
 def process_file(xml_path: pathlib.Path, parser: etree.XMLParser) -> list[str]:
     """
@@ -83,23 +88,23 @@ def process_file(xml_path: pathlib.Path, parser: etree.XMLParser) -> list[str]:
 
         rad_text = utils.json_get_closest_rad_text(root_dict)
 
-        jsonpath_expression = parse('$..drv')
+        jsonpath_expression = parse("$..drv")
         matches = jsonpath_expression.find(root_dict)
 
         drv_kaps = []
         for match in matches:
             drv_data = match.value
-            kap_wrapper = drv_data.get('kap')
-            if kap_wrapper and 'kap' in kap_wrapper:
-                kap_inner = kap_wrapper['kap']
+            kap_wrapper = drv_data.get("kap")
+            if kap_wrapper and "kap" in kap_wrapper:
+                kap_inner = kap_wrapper["kap"]
                 kap_text = get_json_kap_text(kap_inner, rad_text)
                 drv_kaps.append((kap_text, drv_data))
             else:
                 drv_kaps.append(("(No Kap)", drv_data))
 
-        trd_expr = parse('$..trd')
-        trdgrp_expr = parse('$..trdgrp')
-        uzo_expr = parse('$..uzo')
+        trd_expr = parse("$..trd")
+        trdgrp_expr = parse("$..trdgrp")
+        uzo_expr = parse("$..uzo")
 
         for k, drv_data in drv_kaps:
             match_filter = False
@@ -137,9 +142,15 @@ def process_file(xml_path: pathlib.Path, parser: etree.XMLParser) -> list[str]:
 
     return file_results
 
+
 def main():
     parser = argparse.ArgumentParser(description="Process Revo XML files.")
-    parser.add_argument("directory", nargs="?", default="f:/revo-fonto/revo", help="Directory containing XML files")
+    parser.add_argument(
+        "directory",
+        nargs="?",
+        default="f:/revo-fonto/revo",
+        help="Directory containing XML files",
+    )
     args = parser.parse_args()
 
     dir_path = pathlib.Path(args.directory)
@@ -161,6 +172,7 @@ def main():
 
     for res in all_results:
         print(res)
+
 
 if __name__ == "__main__":
     main()
