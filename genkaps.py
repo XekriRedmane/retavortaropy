@@ -160,7 +160,7 @@ def process_file(xml_path: pathlib.Path, parser: etree.XMLParser) -> dict[str, s
                 kap_texts = get_json_kap_text(kap_inner, rad_text, variant_rads)
                 for kap_text in kap_texts:
                     if kap_text:
-                        kap_to_file[kap_text] = str(xml_path)
+                        kap_to_file[kap_text] = xml_path.stem
 
     except Exception as e:
         print(f"Error processing {xml_path.name}: {e}")

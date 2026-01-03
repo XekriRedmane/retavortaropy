@@ -91,7 +91,7 @@ def process_file(xml_path: pathlib.Path, parser: etree.XMLParser) -> dict[str, s
 
         rad_texts = get_rads_from_art(root_dict)
         for rad_text in rad_texts:
-            rad_to_file[rad_text] = str(xml_path)
+            rad_to_file[rad_text] = xml_path.stem
 
     except Exception as e:
         print(f"Error processing {xml_path.name}: {e}")
