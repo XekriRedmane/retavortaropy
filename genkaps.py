@@ -14,7 +14,7 @@ from lxml.sax import saxify
 from jsonpath_ng import parse
 from tqdm import tqdm
 
-from retavortaropy.main import DTDResolver, RevoContentHandler
+from retavortaropy.xmlparse import DTDResolver, RevoContentHandler
 from retavortaropy import utils
 
 

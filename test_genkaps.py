@@ -10,7 +10,7 @@ from jsonpath_ng import parse
 
 sys.path.insert(0, str(pathlib.Path(__file__).parent / "src"))
 
-from retavortaropy.main import DTDResolver, RevoContentHandler
+from retavortaropy.xmlparse import DTDResolver, RevoContentHandler
 from retavortaropy import utils
 from genkaps import get_json_kap_text, get_variant_rads
 

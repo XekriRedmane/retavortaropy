@@ -12,7 +12,7 @@ from lxml import etree
 from lxml.sax import saxify
 from tqdm import tqdm
 
-from retavortaropy.main import DTDResolver, RevoContentHandler
+from retavortaropy.xmlparse import DTDResolver, RevoContentHandler
 
 
 def get_rads_from_art(root_dict: dict[str, Any]) -> list[str]:
