@@ -18,13 +18,37 @@ class TestGensenses(unittest.TestCase):
                 {"text": "  with multiple parts.  "}
             ]
         }
-        result = extract_dif_text(dif_data)
+        result = extract_dif_text(dif_data, None, {})
         self.assertEqual(result, "This is a definition with multiple parts.")
+
+    def test_extract_dif_text_with_tld(self):
+        """Test extracting dif with tld replacement."""
+        dif_data = {
+            "content": [
+                {"text": "A member of the "},
+                {"tld": {"lit": "", "var": ""}},
+                {"text": " people"}
+            ]
+        }
+        result = extract_dif_text(dif_data, "aleut", {})
+        self.assertEqual(result, "A member of the aleut people.")
+
+    def test_extract_dif_text_with_tld_lit(self):
+        """Test extracting dif with tld having lit attribute."""
+        dif_data = {
+            "content": [
+                {"text": "The "},
+                {"tld": {"lit": "A", "var": ""}},
+                {"text": " islands"}
+            ]
+        }
+        result = extract_dif_text(dif_data, "aleut", {})
+        self.assertEqual(result, "The Aleut islands.")
 
     def test_extract_dif_text_empty(self):
         """Test extracting from empty dif."""
         dif_data: dict[str, Any] = {}
-        result = extract_dif_text(dif_data)
+        result = extract_dif_text(dif_data, None, {})
         self.assertEqual(result, "")
 
     def test_process_snc_list_single(self):
@@ -44,8 +68,8 @@ class TestGensenses(unittest.TestCase):
                 }
             }
         ]
-        result = process_snc_list(snc_list)
-        self.assertEqual(result, {"1": "First sense"})
+        result = process_snc_list(snc_list, None, {})
+        self.assertEqual(result, {"1": "First sense."})
 
     def test_process_snc_list_multiple(self):
         """Test processing multiple snc elements."""
@@ -77,8 +101,8 @@ class TestGensenses(unittest.TestCase):
                 }
             }
         ]
-        result = process_snc_list(snc_list)
-        self.assertEqual(result, {"1": "First sense", "2": "Second sense"})
+        result = process_snc_list(snc_list, None, {})
+        self.assertEqual(result, {"1": "First sense.", "2": "Second sense."})
 
     def test_process_snc_list_nested(self):
         """Test processing nested snc/subsnc elements."""
@@ -123,11 +147,11 @@ class TestGensenses(unittest.TestCase):
                 }
             }
         ]
-        result = process_snc_list(snc_list)
+        result = process_snc_list(snc_list, None, {})
         expected = {
-            "1": "First sense",
-            "1.1": "First subsense",
-            "1.2": "Second subsense"
+            "1": "First sense.",
+            "1.1": "First subsense.",
+            "1.2": "Second subsense."
         }
         self.assertEqual(result, expected)
 
@@ -174,11 +198,11 @@ class TestGensenses(unittest.TestCase):
                 }
             }
         ]
-        result = process_snc_list(snc_list)
+        result = process_snc_list(snc_list, None, {})
         expected = {
-            "1": "First sense",
-            "1.1": "Subsense 1.1",
-            "1.1.1": "Subsense 1.1.1"
+            "1": "First sense.",
+            "1.1": "Subsense 1.1.",
+            "1.1.1": "Subsense 1.1.1."
         }
         self.assertEqual(result, expected)
 

@@ -18,15 +18,19 @@ from retavortaropy import utils
 from genkaps import get_json_kap_text, get_variant_rads
 
 
-def extract_dif_text(dif_data: dict[str, Any]) -> str:
+def extract_dif_text(
+    dif_data: dict[str, Any], rad_text: str | None, variant_rads: dict[str, str]
+) -> str:
     """
-    Extract text content from a dif element.
+    Extract text content from a dif element, replacing tld with rad.
 
     Args:
         dif_data: The dif dictionary from JSON
+        rad_text: The base rad text for tld replacement
+        variant_rads: Dictionary mapping var attributes to variant rad texts
 
     Returns:
-        The text content of the dif element
+        The text content of the dif element with tld replaced
     """
     if not dif_data or "content" not in dif_data:
         return ""
@@ -37,18 +41,108 @@ def extract_dif_text(dif_data: dict[str, Any]) -> str:
     for item in content:
         if "text" in item:
             text = item["text"]
-            if text.strip():
-                parts.append(text.strip())
+            parts.append(text)
+        elif "tld" in item:
+            if rad_text is not None:
+                tld_data = item["tld"]
+                lit = tld_data.get("lit", "")
+                var = tld_data.get("var", "")
 
-    return " ".join(parts)
+                # Use variant rad if var attribute is present
+                if var and var in variant_rads:
+                    rad_to_use = variant_rads[var]
+                else:
+                    rad_to_use = rad_text
+
+                if lit:
+                    parts.append(lit + rad_to_use[1:])
+                else:
+                    parts.append(rad_to_use)
+        elif "ref" in item:
+            # Extract text from ref elements, processing tld within them
+            ref_data = item["ref"]
+            ref_content = ref_data.get("content", [])
+            for ref_item in ref_content:
+                if "text" in ref_item:
+                    parts.append(ref_item["text"])
+                elif "tld" in ref_item:
+                    # Process tld inside ref elements
+                    if rad_text is not None:
+                        tld_data = ref_item["tld"]
+                        lit = tld_data.get("lit", "")
+                        var = tld_data.get("var", "")
+
+                        # Use variant rad if var attribute is present
+                        if var and var in variant_rads:
+                            rad_to_use = variant_rads[var]
+                        else:
+                            rad_to_use = rad_text
+
+                        if lit:
+                            parts.append(lit + rad_to_use[1:])
+                        else:
+                            parts.append(rad_to_use)
+        elif "refgrp" in item:
+            # Extract text from refgrp elements (groups of references)
+            refgrp_data = item["refgrp"]
+            refgrp_content = refgrp_data.get("content", [])
+            for refgrp_item in refgrp_content:
+                if "text" in refgrp_item:
+                    parts.append(refgrp_item["text"])
+                elif "ref" in refgrp_item:
+                    # Process ref elements within refgrp
+                    ref_data = refgrp_item["ref"]
+                    ref_content = ref_data.get("content", [])
+                    for ref_item in ref_content:
+                        if "text" in ref_item:
+                            parts.append(ref_item["text"])
+                        elif "tld" in ref_item:
+                            # Process tld inside ref elements
+                            if rad_text is not None:
+                                tld_data = ref_item["tld"]
+                                lit = tld_data.get("lit", "")
+                                var = tld_data.get("var", "")
+
+                                # Use variant rad if var attribute is present
+                                if var and var in variant_rads:
+                                    rad_to_use = variant_rads[var]
+                                else:
+                                    rad_to_use = rad_text
+
+                                if lit:
+                                    parts.append(lit + rad_to_use[1:])
+                                else:
+                                    parts.append(rad_to_use)
+
+    # Join all parts and normalize whitespace
+    result = "".join(parts)
+    # Replace multiple spaces/newlines with single space and strip
+    result = " ".join(result.split())
+
+    # Ensure proper ending punctuation
+    if result.endswith(":"):
+        # Replace trailing colon with period
+        result = result[:-1] + "."
+    elif result and not result[-1] in ".!?;":
+        # Add period if no ending punctuation
+        result = result + "."
+
+    return result
 
 
-def process_snc_list(snc_list: list[dict[str, Any]], base_num: str = "") -> dict[str, str]:
+def process_snc_list(
+    snc_list: list[dict[str, Any]],
+    rad_text: str | None,
+    variant_rads: dict[str, str],
+    base_num: str = "",
+) -> dict[str, str]:
     """
     Process a list of snc/subsnc elements and extract their definitions.
 
     Args:
         snc_list: List of snc dictionaries
+        rad_text: The base rad text for tld replacement
+        variant_rads: Dictionary mapping var attributes to variant rad texts
         base_num: Base number for this level (empty for top level)
 
     Returns:
@@ -58,9 +152,10 @@ def process_snc_list(snc_list: list[dict[str, Any]], base_num: str = "") -> dict
     snc_count = 0
 
     for item in snc_list:
-        if "snc" in item:
+        # Handle both snc and subsnc elements
+        if "snc" in item or "subsnc" in item:
             snc_count += 1
-            snc_data = item["snc"]
+            snc_data = item.get("snc") or item.get("subsnc")
 
             # Determine the sense number
             if base_num:
@@ -68,31 +163,52 @@ def process_snc_list(snc_list: list[dict[str, Any]], base_num: str = "") -> dict
             else:
                 sense_num = str(snc_count)
 
-            # Extract the dif from this snc
+            # Extract the dif from this snc/subsnc
             if "content" in snc_data:
                 for content_item in snc_data["content"]:
                     if "dif" in content_item:
-                        dif_text = extract_dif_text(content_item["dif"])
+                        dif_text = extract_dif_text(
+                            content_item["dif"], rad_text, variant_rads
+                        )
                         if dif_text:
                             result[sense_num] = dif_text
                         break
+                    elif "refgrp" in content_item:
+                        # Check if this is a refgrp with tip="dif"
+                        refgrp_data = content_item["refgrp"]
+                        if refgrp_data.get("tip") == "dif":
+                            # Treat this refgrp as a definition
+                            dif_data = {"content": [content_item]}
+                            dif_text = extract_dif_text(dif_data, rad_text, variant_rads)
+                            if dif_text:
+                                result[sense_num] = dif_text
+                            break
 
-            # Process any subsnc elements recursively
+            # Process any nested snc/subsnc elements recursively
             if "content" in snc_data:
-                subsnc_list = [item for item in snc_data["content"] if "snc" in item]
-                if subsnc_list:
-                    sub_results = process_snc_list(subsnc_list, sense_num)
+                nested_list = [
+                    item for item in snc_data["content"]
+                    if "snc" in item or "subsnc" in item
+                ]
+                if nested_list:
+                    sub_results = process_snc_list(
+                        nested_list, rad_text, variant_rads, sense_num
+                    )
                     result.update(sub_results)
 
     return result
 
 
-def process_drv_or_subdrv(drv_data: dict[str, Any]) -> dict[str, str]:
+def process_drv_or_subdrv(
+    drv_data: dict[str, Any], rad_text: str | None, variant_rads: dict[str, str]
+) -> dict[str, str]:
     """
     Process a drv or subdrv element and extract sense definitions.
 
     Args:
         drv_data: The drv or subdrv dictionary from JSON
+        rad_text: The base rad text for tld replacement
+        variant_rads: Dictionary mapping var attributes to variant rad texts
 
     Returns:
         Dictionary mapping sense numbers to definitions
@@ -103,7 +219,7 @@ def process_drv_or_subdrv(drv_data: dict[str, Any]) -> dict[str, str]:
     content = drv_data.get("content", [])
     snc_list = [item for item in content if "snc" in item]
 
-    return process_snc_list(snc_list)
+    return process_snc_list(snc_list, rad_text, variant_rads)
 
 
 def process_file(xml_path: pathlib.Path, parser: etree.XMLParser) -> dict[str, dict[str, str]]:
@@ -145,7 +261,7 @@ def process_file(xml_path: pathlib.Path, parser: etree.XMLParser) -> dict[str, d
                 kap_texts = get_json_kap_text(kap_inner, rad_text, variant_rads)
 
                 # Get senses for this drv
-                senses = process_drv_or_subdrv(drv_data)
+                senses = process_drv_or_subdrv(drv_data, rad_text, variant_rads)
 
                 # Map each kap variant to the same senses
                 for kap_text in kap_texts:
@@ -166,7 +282,7 @@ def process_file(xml_path: pathlib.Path, parser: etree.XMLParser) -> dict[str, d
                 kap_texts = get_json_kap_text(kap_inner, rad_text, variant_rads)
 
                 # Get senses for this subdrv
-                senses = process_drv_or_subdrv(subdrv_data)
+                senses = process_drv_or_subdrv(subdrv_data, rad_text, variant_rads)
 
                 # Map each kap variant to the same senses
                 for kap_text in kap_texts:
