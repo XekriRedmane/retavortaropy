@@ -1,6 +1,6 @@
 """
 Command line tool to extract sense definitions (dif) from drv and subdrv elements.
-Creates a dictionary mapping sense numbers to their definitions.
+Creates a dictionary mapping kap text to sense dictionaries.
 """
 
 import argparse
@@ -14,6 +14,8 @@ from jsonpath_ng import parse
 from tqdm import tqdm
 
 from retavortaropy.xmlparse import DTDResolver, RevoContentHandler
+from retavortaropy import utils
+from genkaps import get_json_kap_text, get_variant_rads
 
 
 def extract_dif_text(dif_data: dict[str, Any]) -> str:
@@ -113,7 +115,7 @@ def process_file(xml_path: pathlib.Path, parser: etree.XMLParser) -> dict[str, d
         parser: The XML parser to use.
 
     Returns:
-        Dictionary mapping drv mrk to sense dictionaries
+        Dictionary mapping kap text to sense dictionaries
     """
     drv_senses: dict[str, dict[str, str]] = {}
 
@@ -126,18 +128,29 @@ def process_file(xml_path: pathlib.Path, parser: etree.XMLParser) -> dict[str, d
         root = handler.root
         root_dict: dict[str, Any] = root.json_encode()
 
+        rad_text: str | None = utils.json_get_closest_rad_text(root_dict)
+        variant_rads: dict[str, str] = get_variant_rads(root_dict)
+
         # Find all drv elements
         jsonpath_expression = parse("$..drv")
         matches = jsonpath_expression.find(root_dict)
 
         for match in matches:
             drv_data = match.value
-            mrk = drv_data.get("mrk", "")
 
-            if mrk:
+            # Extract kap text from this drv
+            kap_wrapper = drv_data.get("kap")
+            if kap_wrapper and "kap" in kap_wrapper:
+                kap_inner = kap_wrapper["kap"]
+                kap_texts = get_json_kap_text(kap_inner, rad_text, variant_rads)
+
+                # Get senses for this drv
                 senses = process_drv_or_subdrv(drv_data)
-                if senses:
-                    drv_senses[mrk] = senses
+
+                # Map each kap variant to the same senses
+                for kap_text in kap_texts:
+                    if kap_text and senses:
+                        drv_senses[kap_text] = senses
 
         # Find all subdrv elements
         jsonpath_expression = parse("$..subdrv")
@@ -145,12 +158,20 @@ def process_file(xml_path: pathlib.Path, parser: etree.XMLParser) -> dict[str, d
 
         for match in matches:
             subdrv_data = match.value
-            mrk = subdrv_data.get("mrk", "")
 
-            if mrk:
+            # Extract kap text from this subdrv
+            kap_wrapper = subdrv_data.get("kap")
+            if kap_wrapper and "kap" in kap_wrapper:
+                kap_inner = kap_wrapper["kap"]
+                kap_texts = get_json_kap_text(kap_inner, rad_text, variant_rads)
+
+                # Get senses for this subdrv
                 senses = process_drv_or_subdrv(subdrv_data)
-                if senses:
-                    drv_senses[mrk] = senses
+
+                # Map each kap variant to the same senses
+                for kap_text in kap_texts:
+                    if kap_text and senses:
+                        drv_senses[kap_text] = senses
 
     except Exception as e:
         print(f"Error processing {xml_path.name}: {e}")
@@ -198,7 +219,7 @@ def main() -> None:
     xml_parser = etree.XMLParser(load_dtd=True, resolve_entities=True)
     xml_parser.resolvers.add(DTDResolver())
 
-    # Dictionary to store all drv mrk -> sense mappings
+    # Dictionary to store all kap -> sense mappings
     all_senses: dict[str, dict[str, str]] = {}
 
     for xml_file in tqdm(xml_files, desc="Processing XML files", unit="file"):
@@ -210,7 +231,7 @@ def main() -> None:
     with open(output_path, "w", encoding="UTF-8") as f:
         json.dump(all_senses, f, ensure_ascii=False, indent=2)
 
-    print(f"\nExtracted senses from {len(all_senses)} drv/subdrv elements")
+    print(f"\nExtracted senses for {len(all_senses)} kap entries")
     print(f"Results written to {output_path}")
 
 
