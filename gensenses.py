@@ -318,8 +318,8 @@ def main() -> None:
     parser.add_argument(
         "-o",
         "--output",
-        default="sense_dictionary.json",
-        help="Output JSON file path (default: sense_dictionary.json)",
+        default=None,
+        help="Output JSON file path (default: write to console)",
     )
     args = parser.parse_args()
 
@@ -348,17 +348,30 @@ def main() -> None:
     # Dictionary to store all kap -> sense mappings
     all_senses: dict[str, dict[str, str]] = {}
 
-    for xml_file in tqdm(xml_files, desc="Processing XML files", unit="file"):
-        file_senses = process_file(xml_file, xml_parser)
-        all_senses.update(file_senses)
+    # Use tqdm only when writing to a file
+    if args.output:
+        for xml_file in tqdm(xml_files, desc="Processing XML files", unit="file"):
+            file_senses = process_file(xml_file, xml_parser)
+            all_senses.update(file_senses)
+    else:
+        # No progress bar when writing to console
+        for xml_file in xml_files:
+            file_senses = process_file(xml_file, xml_parser)
+            all_senses.update(file_senses)
 
-    # Write results to JSON file
-    output_path = pathlib.Path(args.output)
-    with open(output_path, "w", encoding="UTF-8") as f:
-        json.dump(all_senses, f, ensure_ascii=False, indent=2)
-
-    print(f"\nExtracted senses for {len(all_senses)} kap entries")
-    print(f"Results written to {output_path}")
+    # Write results to output file or console
+    if args.output:
+        output_path = pathlib.Path(args.output)
+        with open(output_path, "w", encoding="UTF-8") as f:
+            json.dump(all_senses, f, ensure_ascii=False, indent=2)
+        print(f"\nExtracted senses for {len(all_senses)} kap entries")
+        print(f"Results written to {output_path}")
+    else:
+        # Write to console with UTF-8 encoding - no other output
+        import sys
+        # Reconfigure stdout to use UTF-8 encoding
+        sys.stdout.reconfigure(encoding='utf-8')
+        json.dump(all_senses, sys.stdout, ensure_ascii=False, indent=2)
 
 
 if __name__ == "__main__":
