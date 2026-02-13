@@ -8,6 +8,7 @@ import argparse
 import json
 import pathlib
 import re
+import sys
 from typing import Any
 from lxml import etree
 from lxml.sax import saxify
@@ -15,6 +16,7 @@ from jsonpath_ng import parse
 from tqdm import tqdm
 
 from retavortaropy.xmlparse import DTDResolver, RevoContentHandler
+from config import get_revo_path
 from retavortaropy import utils
 
 
@@ -173,12 +175,23 @@ def main() -> None:
         description="Extract drv kap values from Revo XML files."
     )
     parser.add_argument(
-        "path", nargs="?", default="f:/revo-fonto/revo", help="Directory or file"
+        "path", nargs="?", default=None, help="Directory or file"
     )
     parser.add_argument(
         "-o", "--output", default="kap_dictionary.json", help="Output JSON file"
     )
     args = parser.parse_args()
+
+    if args.path is None:
+        revo_path = get_revo_path()
+        if revo_path is None:
+            print(
+                "Error: revo-fonto dictionary not found. "
+                "Run 'python download_revo.py' to download it.",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+        args.path = str(revo_path)
 
     input_path = pathlib.Path(args.path)
     if not input_path.exists():

@@ -6,6 +6,7 @@ Creates a dictionary mapping kap text to sense dictionaries.
 import argparse
 import json
 import pathlib
+import sys
 from typing import Any
 
 from lxml import etree
@@ -15,6 +16,7 @@ from tqdm import tqdm
 
 from retavortaropy.xmlparse import DTDResolver, RevoContentHandler
 from retavortaropy import utils
+from config import get_revo_path
 from genkaps import get_json_kap_text, get_variant_rads
 
 
@@ -312,7 +314,7 @@ def main() -> None:
     parser.add_argument(
         "path",
         nargs="?",
-        default="f:/revo-fonto/revo",
+        default=None,
         help="Directory containing XML files or single XML file",
     )
     parser.add_argument(
@@ -322,6 +324,17 @@ def main() -> None:
         help="Output JSON file path (default: write to console)",
     )
     args = parser.parse_args()
+
+    if args.path is None:
+        revo_path = get_revo_path()
+        if revo_path is None:
+            print(
+                "Error: revo-fonto dictionary not found. "
+                "Run 'python download_revo.py' to download it.",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+        args.path = str(revo_path)
 
     input_path = pathlib.Path(args.path)
     if not input_path.exists():
@@ -368,7 +381,6 @@ def main() -> None:
         print(f"Results written to {output_path}")
     else:
         # Write to console with UTF-8 encoding - no other output
-        import sys
         # Reconfigure stdout to use UTF-8 encoding
         sys.stdout.reconfigure(encoding='utf-8')
         json.dump(all_senses, sys.stdout, ensure_ascii=False, indent=2)

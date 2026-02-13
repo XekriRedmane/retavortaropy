@@ -4,12 +4,14 @@ Script to process all XML files in a directory, convert to JSON, and extract fil
 
 import argparse
 import pathlib
+import sys
 from typing import Any
 from lxml import etree
 from lxml.sax import saxify
 from jsonpath_ng import parse
 from tqdm import tqdm
 
+from config import get_revo_path
 from retavortaropy.main import DTDResolver, RevoContentHandler
 from retavortaropy import utils
 
@@ -148,10 +150,21 @@ def main():
     parser.add_argument(
         "directory",
         nargs="?",
-        default="f:/revo-fonto/revo",
+        default=None,
         help="Directory containing XML files",
     )
     args = parser.parse_args()
+
+    if args.directory is None:
+        revo_path = get_revo_path()
+        if revo_path is None:
+            print(
+                "Error: revo-fonto dictionary not found. "
+                "Run 'python download_revo.py' to download it.",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+        args.directory = str(revo_path)
 
     dir_path = pathlib.Path(args.directory)
     if not dir_path.exists() or not dir_path.is_dir():

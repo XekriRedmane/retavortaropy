@@ -7,11 +7,13 @@ Includes both base rads and variant rads.
 import argparse
 import json
 import pathlib
+import sys
 from typing import Any
 from lxml import etree
 from lxml.sax import saxify
 from tqdm import tqdm
 
+from config import get_revo_path
 from retavortaropy.xmlparse import DTDResolver, RevoContentHandler
 
 
@@ -106,7 +108,7 @@ def main() -> None:
     parser.add_argument(
         "path",
         nargs="?",
-        default="f:/revo-fonto/revo",
+        default=None,
         help="Directory containing XML files or single XML file",
     )
     parser.add_argument(
@@ -116,6 +118,17 @@ def main() -> None:
         help="Output JSON file path (default: rad_dictionary.json)",
     )
     args = parser.parse_args()
+
+    if args.path is None:
+        revo_path = get_revo_path()
+        if revo_path is None:
+            print(
+                "Error: revo-fonto dictionary not found. "
+                "Run 'python download_revo.py' to download it.",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+        args.path = str(revo_path)
 
     input_path = pathlib.Path(args.path)
     if not input_path.exists():

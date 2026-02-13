@@ -4,6 +4,7 @@
 
 from dataclasses import asdict
 import json
+import sys
 from typing import cast
 import pathlib
 
@@ -13,6 +14,7 @@ from tqdm import tqdm
 
 from retavortaropy import utils
 from retavortaropy.data import vortaro
+from config import get_revo_path
 from retavortaropy.xmlparse import DTDResolver, RevoContentHandler
 
 
@@ -42,7 +44,14 @@ def main() -> None:
 
     files_and_kap: list[tuple[pathlib.Path, str]] = []
 
-    revo_dir = pathlib.Path("F:/revo-fonto/revo")
+    revo_dir = get_revo_path()
+    if revo_dir is None:
+        print(
+            "Error: revo-fonto dictionary not found. "
+            "Run 'python download_revo.py' to download it.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
     for xml_file in tqdm(list(revo_dir.glob("*.xml"))):
         # print(f"Processing {xml_file.name}")
         try:
