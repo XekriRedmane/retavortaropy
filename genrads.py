@@ -8,92 +8,30 @@ import argparse
 import json
 import pathlib
 import sys
-from typing import Any
 from lxml import etree
-from lxml.sax import saxify
 from tqdm import tqdm
 
 from config import get_revo_path, get_genfiles_path
-from retavortaropy.xmlparse import DTDResolver, RevoContentHandler
-
-
-def get_rads_from_art(root_dict: dict[str, Any]) -> list[str]:
-    """
-    Extract all rad texts from the top-level art/kap element.
-    Includes both base rad and variant rads.
-
-    Args:
-        root_dict: The root dictionary from JSON
-
-    Returns:
-        List of rad texts (base rad + any variant rads)
-    """
-    rads = []
-
-    try:
-        vortaro = root_dict.get("vortaro", {})
-        content = vortaro.get("content", [])
-
-        for item in content:
-            if "art" in item:
-                art_data = item["art"]
-                kap_wrapper = art_data.get("kap", {})
-                kap_data = kap_wrapper.get("kap", {})
-                kap_content = kap_data.get("content", [])
-
-                for kap_item in kap_content:
-                    if "rad" in kap_item:
-                        rad_data = kap_item["rad"]
-                        var = rad_data.get("var", "")
-                        text = rad_data.get("text", "")
-                        # Include base rad (no var attribute or empty var)
-                        if not var and text:
-                            rads.append(text)
-                    elif "var" in kap_item:
-                        # Extract variant rad from var/kap/kap/content
-                        var_data = kap_item["var"]
-                        if "kap" in var_data:
-                            var_kap_wrapper = var_data["kap"]
-                            if "kap" in var_kap_wrapper:
-                                var_kap = var_kap_wrapper["kap"]
-                                var_content = var_kap.get("content", [])
-                                for var_item in var_content:
-                                    if "rad" in var_item:
-                                        rad_data = var_item["rad"]
-                                        text = rad_data.get("text", "")
-                                        if text:
-                                            rads.append(text)
-    except Exception:
-        pass
-
-    return rads
+from retavortaropy.xmlparse import DTDResolver
 
 
 def process_file(xml_path: pathlib.Path, parser: etree.XMLParser) -> dict[str, str]:
-    """
-    Processes a single XML file and extracts all rad texts.
-
-    Args:
-        xml_path: Path to the XML file to process.
-        parser: The XML parser to use.
-
-    Returns:
-        Dictionary mapping rad texts to file path
-    """
-    rad_to_file = {}
+    """Processes a single XML file and extracts all rad texts."""
+    rad_to_file: dict[str, str] = {}
 
     try:
         with open(xml_path, "r", encoding="UTF-8") as f:
             tree = etree.parse(f, parser=parser)
 
-        handler = RevoContentHandler()
-        saxify(tree, handler)
-        root = handler.root
-        root_dict = root.json_encode()
+        # Base rads (without var attribute)
+        for rad_el in tree.xpath("//art/kap/rad[not(@var)]"):
+            if rad_el.text:
+                rad_to_file[rad_el.text] = xml_path.stem
 
-        rad_texts = get_rads_from_art(root_dict)
-        for rad_text in rad_texts:
-            rad_to_file[rad_text] = xml_path.stem
+        # Variant rads (inside var/kap elements)
+        for rad_el in tree.xpath("//art/kap/var/kap/rad"):
+            if rad_el.text:
+                rad_to_file[rad_el.text] = xml_path.stem
 
     except Exception as e:
         print(f"Error processing {xml_path.name}: {e}")
