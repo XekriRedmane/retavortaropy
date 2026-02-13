@@ -8,133 +8,70 @@ import json
 import pathlib
 import sys
 import zipfile
-from typing import Any
 
 from lxml import etree
-from lxml.sax import saxify
-from jsonpath_ng import parse
 from tqdm import tqdm
 
-from retavortaropy.xmlparse import DTDResolver, RevoContentHandler
-from retavortaropy import utils
+from retavortaropy.xmlparse import DTDResolver
 from config import get_revo_path, get_genfiles_path
-from genkaps import get_json_kap_text, get_variant_rads
+from genkaps import reconstruct_kap_text
 
 
 def extract_dif_text(
-    dif_data: dict[str, Any], rad_text: str | None, variant_rads: dict[str, str]
+    dif_el: etree._Element, rad_text: str | None, variant_rads: dict[str, str]
 ) -> str:
     """
     Extract text content from a dif element, replacing tld with rad.
 
     Args:
-        dif_data: The dif dictionary from JSON
+        dif_el: The lxml dif element (or ref/refgrp element)
         rad_text: The base rad text for tld replacement
         variant_rads: Dictionary mapping var attributes to variant rad texts
 
     Returns:
         The text content of the dif element with tld replaced
     """
-    if not dif_data or "content" not in dif_data:
-        return ""
-
     parts: list[str] = []
-    content = dif_data.get("content", [])
 
-    for item in content:
-        if "text" in item:
-            text = item["text"]
-            parts.append(text)
-        elif "tld" in item:
-            if rad_text is not None:
-                tld_data = item["tld"]
-                lit = tld_data.get("lit", "")
-                var = tld_data.get("var", "")
+    def _collect_text(el: etree._Element) -> None:
+        """Collect text from an element, handling tld, ref, and refgrp children."""
+        if el.text:
+            parts.append(el.text)
 
-                # Use variant rad if var attribute is present
-                if var and var in variant_rads:
-                    rad_to_use = variant_rads[var]
-                else:
-                    rad_to_use = rad_text
+        for child in el:
+            if child.tag == "tld":
+                if rad_text is not None:
+                    lit = child.get("lit", "")
+                    var = child.get("var", "")
+                    rad_to_use = variant_rads.get(var, rad_text) if var else rad_text
+                    if lit:
+                        parts.append(lit + rad_to_use[1:])
+                    else:
+                        parts.append(rad_to_use)
+            elif child.tag in ("ref", "refgrp"):
+                _collect_text(child)
+            # Other tags (ekz, klr, etc.): skip element content
 
-                if lit:
-                    parts.append(lit + rad_to_use[1:])
-                else:
-                    parts.append(rad_to_use)
-        elif "ref" in item:
-            # Extract text from ref elements, processing tld within them
-            ref_data = item["ref"]
-            ref_content = ref_data.get("content", [])
-            for ref_item in ref_content:
-                if "text" in ref_item:
-                    parts.append(ref_item["text"])
-                elif "tld" in ref_item:
-                    # Process tld inside ref elements
-                    if rad_text is not None:
-                        tld_data = ref_item["tld"]
-                        lit = tld_data.get("lit", "")
-                        var = tld_data.get("var", "")
+            # Always include tail text (text after the child element)
+            if child.tail:
+                parts.append(child.tail)
 
-                        # Use variant rad if var attribute is present
-                        if var and var in variant_rads:
-                            rad_to_use = variant_rads[var]
-                        else:
-                            rad_to_use = rad_text
-
-                        if lit:
-                            parts.append(lit + rad_to_use[1:])
-                        else:
-                            parts.append(rad_to_use)
-        elif "refgrp" in item:
-            # Extract text from refgrp elements (groups of references)
-            refgrp_data = item["refgrp"]
-            refgrp_content = refgrp_data.get("content", [])
-            for refgrp_item in refgrp_content:
-                if "text" in refgrp_item:
-                    parts.append(refgrp_item["text"])
-                elif "ref" in refgrp_item:
-                    # Process ref elements within refgrp
-                    ref_data = refgrp_item["ref"]
-                    ref_content = ref_data.get("content", [])
-                    for ref_item in ref_content:
-                        if "text" in ref_item:
-                            parts.append(ref_item["text"])
-                        elif "tld" in ref_item:
-                            # Process tld inside ref elements
-                            if rad_text is not None:
-                                tld_data = ref_item["tld"]
-                                lit = tld_data.get("lit", "")
-                                var = tld_data.get("var", "")
-
-                                # Use variant rad if var attribute is present
-                                if var and var in variant_rads:
-                                    rad_to_use = variant_rads[var]
-                                else:
-                                    rad_to_use = rad_text
-
-                                if lit:
-                                    parts.append(lit + rad_to_use[1:])
-                                else:
-                                    parts.append(rad_to_use)
+    _collect_text(dif_el)
 
     # Join all parts and normalize whitespace
-    result = "".join(parts)
-    # Replace multiple spaces/newlines with single space and strip
-    result = " ".join(result.split())
+    result = " ".join("".join(parts).split())
 
     # Ensure proper ending punctuation
     if result.endswith(":"):
-        # Replace trailing colon with period
         result = result[:-1] + "."
-    elif result and not result[-1] in ".!?;":
-        # Add period if no ending punctuation
+    elif result and result[-1] not in ".!?;":
         result = result + "."
 
     return result
 
 
 def process_snc_list(
-    snc_list: list[dict[str, Any]],
+    snc_elements: list[etree._Element],
     rad_text: str | None,
     variant_rads: dict[str, str],
     base_num: str = "",
@@ -143,7 +80,7 @@ def process_snc_list(
     Process a list of snc/subsnc elements and extract their definitions.
 
     Args:
-        snc_list: List of snc dictionaries
+        snc_elements: List of lxml snc/subsnc elements
         rad_text: The base rad text for tld replacement
         variant_rads: Dictionary mapping var attributes to variant rad texts
         base_num: Base number for this level (empty for top level)
@@ -154,85 +91,47 @@ def process_snc_list(
     result: dict[str, str] = {}
     snc_count = 0
 
-    for item in snc_list:
-        # Handle both snc and subsnc elements
-        if "snc" in item or "subsnc" in item:
-            snc_count += 1
-            snc_data = item.get("snc") or item.get("subsnc")
+    for snc_el in snc_elements:
+        snc_count += 1
+        sense_num = f"{base_num}.{snc_count}" if base_num else str(snc_count)
 
-            # Determine the sense number
-            if base_num:
-                sense_num = f"{base_num}.{snc_count}"
-            else:
-                sense_num = str(snc_count)
+        # Look for definition: dif, ref[@tip="dif"], or refgrp[@tip="dif"]
+        dif_el = snc_el.find("dif")
+        if dif_el is None:
+            dif_el = snc_el.find('ref[@tip="dif"]')
+        if dif_el is None:
+            dif_el = snc_el.find('refgrp[@tip="dif"]')
 
-            # Extract the dif from this snc/subsnc
-            if "content" in snc_data:
-                for content_item in snc_data["content"]:
-                    if "dif" in content_item:
-                        dif_text = extract_dif_text(
-                            content_item["dif"], rad_text, variant_rads
-                        )
-                        if dif_text:
-                            result[sense_num] = dif_text
-                        break
-                    elif "refgrp" in content_item:
-                        # Check if this is a refgrp with tip="dif"
-                        refgrp_data = content_item["refgrp"]
-                        if refgrp_data.get("tip") == "dif":
-                            # Treat this refgrp as a definition
-                            dif_data = {"content": [content_item]}
-                            dif_text = extract_dif_text(dif_data, rad_text, variant_rads)
-                            if dif_text:
-                                result[sense_num] = dif_text
-                            break
-                    elif "ref" in content_item:
-                        # Check if this is a ref with tip="dif"
-                        ref_data = content_item["ref"]
-                        if ref_data.get("tip") == "dif":
-                            # Treat this ref as a definition
-                            dif_data = {"content": [content_item]}
-                            dif_text = extract_dif_text(dif_data, rad_text, variant_rads)
-                            if dif_text:
-                                result[sense_num] = dif_text
-                            break
+        if dif_el is not None:
+            dif_text = extract_dif_text(dif_el, rad_text, variant_rads)
+            if dif_text:
+                result[sense_num] = dif_text
 
-            # Process any nested snc/subsnc elements recursively
-            if "content" in snc_data:
-                nested_list = [
-                    item for item in snc_data["content"]
-                    if "snc" in item or "subsnc" in item
-                ]
-                if nested_list:
-                    sub_results = process_snc_list(
-                        nested_list, rad_text, variant_rads, sense_num
-                    )
-                    result.update(sub_results)
+        # Process nested snc/subsnc direct children
+        nested = [ch for ch in snc_el if ch.tag in ("snc", "subsnc")]
+        if nested:
+            sub_results = process_snc_list(nested, rad_text, variant_rads, sense_num)
+            result.update(sub_results)
 
     return result
 
 
 def process_drv_or_subdrv(
-    drv_data: dict[str, Any], rad_text: str | None, variant_rads: dict[str, str]
+    drv_el: etree._Element, rad_text: str | None, variant_rads: dict[str, str]
 ) -> dict[str, str]:
     """
     Process a drv or subdrv element and extract sense definitions.
 
     Args:
-        drv_data: The drv or subdrv dictionary from JSON
+        drv_el: The lxml drv or subdrv element
         rad_text: The base rad text for tld replacement
         variant_rads: Dictionary mapping var attributes to variant rad texts
 
     Returns:
         Dictionary mapping sense numbers to definitions
     """
-    if not drv_data or "content" not in drv_data:
-        return {}
-
-    content = drv_data.get("content", [])
-    snc_list = [item for item in content if "snc" in item]
-
-    return process_snc_list(snc_list, rad_text, variant_rads)
+    snc_elements = drv_el.findall("snc")
+    return process_snc_list(snc_elements, rad_text, variant_rads)
 
 
 def process_file(xml_path: pathlib.Path, parser: etree.XMLParser) -> dict[str, dict[str, str]]:
@@ -252,55 +151,27 @@ def process_file(xml_path: pathlib.Path, parser: etree.XMLParser) -> dict[str, d
         with open(xml_path, "r", encoding="UTF-8") as f:
             tree = etree.parse(f, parser=parser)
 
-        handler = RevoContentHandler()
-        saxify(tree, handler)
-        root = handler.root
-        root_dict: dict[str, Any] = root.json_encode()
+        # Get base rad text from article-level kap
+        rad_els = tree.xpath("//art/kap/rad")
+        rad_text: str | None = rad_els[0].text if rad_els else None
 
-        rad_text: str | None = utils.json_get_closest_rad_text(root_dict)
-        variant_rads: dict[str, str] = get_variant_rads(root_dict)
+        # Get variant rads (rad elements with var attribute anywhere in art/kap)
+        variant_rads: dict[str, str] = {}
+        for rad_el in tree.xpath("//art/kap//rad[@var]"):
+            var = rad_el.get("var", "")
+            if var and rad_el.text:
+                variant_rads[var] = rad_el.text
 
-        # Find all drv elements
-        jsonpath_expression = parse("$..drv")
-        matches = jsonpath_expression.find(root_dict)
-
-        for match in matches:
-            drv_data = match.value
-
-            # Extract kap text from this drv
-            kap_wrapper = drv_data.get("kap")
-            if kap_wrapper and "kap" in kap_wrapper:
-                kap_inner = kap_wrapper["kap"]
-                kap_texts = get_json_kap_text(kap_inner, rad_text, variant_rads)
-
-                # Get senses for this drv
-                senses = process_drv_or_subdrv(drv_data, rad_text, variant_rads)
-
-                # Map each kap variant to the same senses
-                for kap_text in kap_texts:
-                    if kap_text and senses:
-                        drv_senses[kap_text] = senses
-
-        # Find all subdrv elements
-        jsonpath_expression = parse("$..subdrv")
-        matches = jsonpath_expression.find(root_dict)
-
-        for match in matches:
-            subdrv_data = match.value
-
-            # Extract kap text from this subdrv
-            kap_wrapper = subdrv_data.get("kap")
-            if kap_wrapper and "kap" in kap_wrapper:
-                kap_inner = kap_wrapper["kap"]
-                kap_texts = get_json_kap_text(kap_inner, rad_text, variant_rads)
-
-                # Get senses for this subdrv
-                senses = process_drv_or_subdrv(subdrv_data, rad_text, variant_rads)
-
-                # Map each kap variant to the same senses
-                for kap_text in kap_texts:
-                    if kap_text and senses:
-                        drv_senses[kap_text] = senses
+        # Process all drv and subdrv elements
+        for tag in ("drv", "subdrv"):
+            for el in tree.xpath(f"//{tag}"):
+                kap_el = el.find("kap")
+                if kap_el is not None:
+                    kap_texts = reconstruct_kap_text(kap_el, rad_text, variant_rads)
+                    senses = process_drv_or_subdrv(el, rad_text, variant_rads)
+                    for kap_text in kap_texts:
+                        if kap_text and senses:
+                            drv_senses[kap_text] = senses
 
     except Exception as e:
         print(f"Error processing {xml_path.name}: {e}")
