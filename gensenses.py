@@ -7,6 +7,7 @@ import argparse
 import json
 import pathlib
 import sys
+import zipfile
 from typing import Any
 
 from lxml import etree
@@ -16,7 +17,7 @@ from tqdm import tqdm
 
 from retavortaropy.xmlparse import DTDResolver, RevoContentHandler
 from retavortaropy import utils
-from config import get_revo_path
+from config import get_revo_path, get_genfiles_path
 from genkaps import get_json_kap_text, get_variant_rads
 
 
@@ -321,7 +322,7 @@ def main() -> None:
         "-o",
         "--output",
         default=None,
-        help="Output JSON file path (default: write to console)",
+        help="Output JSON file path (writes single merged JSON instead of zipfile)",
     )
     args = parser.parse_args()
 
@@ -358,32 +359,46 @@ def main() -> None:
     xml_parser = etree.XMLParser(load_dtd=True, resolve_entities=True)
     xml_parser.resolvers.add(DTDResolver())
 
-    # Dictionary to store all kap -> sense mappings
-    all_senses: dict[str, dict[str, str]] = {}
-
-    # Use tqdm only when writing to a file
     if args.output:
+        # -o mode: merge all senses into a single JSON file
+        all_senses: dict[str, dict[str, str]] = {}
         for xml_file in tqdm(xml_files, desc="Processing XML files", unit="file"):
             file_senses = process_file(xml_file, xml_parser)
             all_senses.update(file_senses)
-    else:
-        # No progress bar when writing to console
-        for xml_file in xml_files:
-            file_senses = process_file(xml_file, xml_parser)
-            all_senses.update(file_senses)
 
-    # Write results to output file or console
-    if args.output:
         output_path = pathlib.Path(args.output)
         with open(output_path, "w", encoding="UTF-8") as f:
             json.dump(all_senses, f, ensure_ascii=False, indent=2)
         print(f"\nExtracted senses for {len(all_senses)} kap entries")
         print(f"Results written to {output_path}")
     else:
-        # Write to console with UTF-8 encoding - no other output
-        # Reconfigure stdout to use UTF-8 encoding
-        sys.stdout.reconfigure(encoding='utf-8')
-        json.dump(all_senses, sys.stdout, ensure_ascii=False, indent=2)
+        # Default mode: generate a zipfile with one JSON per XML file
+        genfiles_path = get_genfiles_path()
+        if genfiles_path is None:
+            print(
+                "Error: genfiles path not configured. "
+                "Run 'python download_revo.py' to set it up.",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+        genfiles_path.mkdir(parents=True, exist_ok=True)
+        zip_path = genfiles_path / "senses.zip"
+
+        total_entries = 0
+        with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
+            for xml_file in tqdm(xml_files, desc="Processing XML files", unit="file"):
+                file_senses = process_file(xml_file, xml_parser)
+                if file_senses:
+                    json_bytes = json.dumps(
+                        file_senses, ensure_ascii=False
+                    ).encode("utf-8")
+                    zf.writestr(
+                        f"jsondata/{xml_file.stem}.json", json_bytes
+                    )
+                    total_entries += len(file_senses)
+
+        print(f"\nExtracted senses for {total_entries} kap entries")
+        print(f"Results written to {zip_path}")
 
 
 if __name__ == "__main__":
