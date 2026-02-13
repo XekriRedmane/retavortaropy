@@ -13,7 +13,7 @@ from lxml import etree
 from lxml.sax import saxify
 from tqdm import tqdm
 
-from config import get_revo_path
+from config import get_revo_path, get_genfiles_path
 from retavortaropy.xmlparse import DTDResolver, RevoContentHandler
 
 
@@ -114,10 +114,22 @@ def main() -> None:
     parser.add_argument(
         "-o",
         "--output",
-        default="rad_dictionary.json",
-        help="Output JSON file path (default: rad_dictionary.json)",
+        default=None,
+        help="Output JSON file path",
     )
     args = parser.parse_args()
+
+    if args.output is None:
+        genfiles_path = get_genfiles_path()
+        if genfiles_path is None:
+            print(
+                "Error: genfiles path not configured. "
+                "Run 'python download_revo.py' to set it up.",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+        genfiles_path.mkdir(parents=True, exist_ok=True)
+        args.output = str(genfiles_path / "rad_dictionary.json")
 
     if args.path is None:
         revo_path = get_revo_path()

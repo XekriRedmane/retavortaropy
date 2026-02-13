@@ -39,3 +39,12 @@ def get_revo_path() -> pathlib.Path | None:
     if revo_path:
         return pathlib.Path(revo_path)
     return None
+
+
+def get_genfiles_path() -> pathlib.Path | None:
+    """Returns the saved genfiles path, or None if not configured."""
+    config = load_config()
+    genfiles_path = config.get("genfiles_path")
+    if genfiles_path:
+        return pathlib.Path(genfiles_path)
+    return None

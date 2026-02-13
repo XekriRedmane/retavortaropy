@@ -54,14 +54,17 @@ def main() -> None:
             sys.exit(1)
         print("Clone complete.")
 
-    # Save the revo subdirectory path to config
+    # Save the revo subdirectory path and genfiles path to config
     revo_path = dest / "revo"
+    genfiles_path = dest.parent / "genfiles"
     config = load_config()
     config["revo_fonto_path"] = str(revo_path)
+    config["genfiles_path"] = str(genfiles_path)
     save_config(config)
 
     print(f"Saved revo path: {revo_path}")
-    print("Other tools will now use this path automatically.")
+    print(f"Saved genfiles path: {genfiles_path}")
+    print("Other tools will now use these paths automatically.")
 
 
 if __name__ == "__main__":

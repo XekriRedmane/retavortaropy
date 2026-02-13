@@ -16,7 +16,7 @@ from jsonpath_ng import parse
 from tqdm import tqdm
 
 from retavortaropy.xmlparse import DTDResolver, RevoContentHandler
-from config import get_revo_path
+from config import get_revo_path, get_genfiles_path
 from retavortaropy import utils
 
 
@@ -178,9 +178,21 @@ def main() -> None:
         "path", nargs="?", default=None, help="Directory or file"
     )
     parser.add_argument(
-        "-o", "--output", default="kap_dictionary.json", help="Output JSON file"
+        "-o", "--output", default=None, help="Output JSON file"
     )
     args = parser.parse_args()
+
+    if args.output is None:
+        genfiles_path = get_genfiles_path()
+        if genfiles_path is None:
+            print(
+                "Error: genfiles path not configured. "
+                "Run 'python download_revo.py' to set it up.",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+        genfiles_path.mkdir(parents=True, exist_ok=True)
+        args.output = str(genfiles_path / "kap_dictionary.json")
 
     if args.path is None:
         revo_path = get_revo_path()
