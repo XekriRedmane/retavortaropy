@@ -11,13 +11,10 @@ import re
 import sys
 from typing import Any
 from lxml import etree
-from lxml.sax import saxify
-from jsonpath_ng import parse
 from tqdm import tqdm
 
-from retavortaropy.xmlparse import DTDResolver, RevoContentHandler
+from retavortaropy.xmlparse import DTDResolver
 from config import get_revo_path, get_genfiles_path
-from retavortaropy import utils
 
 
 def get_variant_rads(root_dict: dict[str, Any]) -> dict[str, str]:
@@ -135,6 +132,56 @@ def get_json_kap_text(
     return result
 
 
+def reconstruct_kap_text(
+    kap_el: etree._Element,
+    rad_text: str | None,
+    variant_rads: dict[str, str],
+    include_vars: bool = True,
+) -> list[str]:
+    """
+    Reconstructs kap text(s) directly from an lxml kap element.
+    Returns list of kap texts (base kap + any variants).
+    """
+    base_parts: list[str] = []
+    variants: list[str] = []
+
+    if kap_el.text and kap_el.text.strip():
+        base_parts.append(kap_el.text)
+
+    for child in kap_el:
+        if child.tag == "tld":
+            if rad_text is not None:
+                lit = child.get("lit", "")
+                var = child.get("var", "")
+                rad_to_use = variant_rads.get(var, rad_text) if var else rad_text
+                if lit:
+                    base_parts.append(lit + rad_to_use[1:])
+                else:
+                    base_parts.append(rad_to_use)
+        elif child.tag == "rad":
+            if child.text:
+                base_parts.append(child.text)
+        elif child.tag == "var" and include_vars:
+            var_kap = child.find("kap")
+            if var_kap is not None:
+                var_texts = reconstruct_kap_text(
+                    var_kap, rad_text, variant_rads, include_vars=False
+                )
+                variants.extend(var_texts)
+
+        if child.tail and child.tail.strip():
+            base_parts.append(child.tail)
+
+    base_text: str = "".join(base_parts).strip()
+    base_text = re.sub(r"[,;]\s*$", "", base_text).strip()
+
+    result: list[str] = []
+    if base_text:
+        result.append(base_text)
+    result.extend(variants)
+    return result
+
+
 def process_file(xml_path: pathlib.Path, parser: etree.XMLParser) -> dict[str, str]:
     """Processes a single XML file and returns kap->file mapping."""
     kap_to_file: dict[str, str] = {}
@@ -143,26 +190,23 @@ def process_file(xml_path: pathlib.Path, parser: etree.XMLParser) -> dict[str, s
         with open(xml_path, "r", encoding="UTF-8") as f:
             tree = etree.parse(f, parser=parser)
 
-        handler = RevoContentHandler()
-        saxify(tree, handler)
-        root = handler.root
-        root_dict: dict[str, Any] = root.json_encode()
+        # Get base rad text from article-level kap
+        rad_els = tree.xpath("//art/kap/rad")
+        rad_text: str | None = rad_els[0].text if rad_els else None
 
-        rad_text: str | None = utils.json_get_closest_rad_text(root_dict)
-        variant_rads: dict[str, str] = get_variant_rads(root_dict)
+        # Get variant rads (rad elements with var attribute anywhere in art/kap)
+        variant_rads: dict[str, str] = {}
+        for rad_el in tree.xpath("//art/kap//rad[@var]"):
+            var = rad_el.get("var", "")
+            if var and rad_el.text:
+                variant_rads[var] = rad_el.text
 
-        jsonpath_expression = parse("$..drv")
-        matches = jsonpath_expression.find(root_dict)
-
-        for match in matches:
-            drv_data = match.value
-            kap_wrapper = drv_data.get("kap")
-            if kap_wrapper and "kap" in kap_wrapper:
-                kap_inner = kap_wrapper["kap"]
-                kap_texts = get_json_kap_text(kap_inner, rad_text, variant_rads)
-                for kap_text in kap_texts:
-                    if kap_text:
-                        kap_to_file[kap_text] = xml_path.stem
+        # Extract kap text from each drv/kap element
+        for kap_el in tree.xpath("//drv/kap"):
+            kap_texts = reconstruct_kap_text(kap_el, rad_text, variant_rads)
+            for kap_text in kap_texts:
+                if kap_text:
+                    kap_to_file[kap_text] = xml_path.stem
 
     except Exception as e:
         print(f"Error processing {xml_path.name}: {e}")
